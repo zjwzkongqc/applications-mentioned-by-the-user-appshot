@@ -246,6 +246,23 @@ const handler = {
       const credentials=auth.account?await q.one('SELECT email FROM account_credentials WHERE account_id=?',auth.account.id):null;
       return json({account:auth.account?{...accountView(auth.account),hasEmail:!!credentials}:null,clubs:clubs.map(c=>({id:c.id,name:c.name,nickname:c.nickname,isOwner:!!c.is_owner}))});
     }
+    if(url.pathname==='/api/auth/start'&&r.method==='POST'){
+      if(auth.hash&&!auth.account&&await q.one('SELECT id FROM members WHERE session_hash=? AND account_id IS NULL AND removed_at IS NULL',auth.hash))problem('本设备已有原名片，请先保存原身份，继续使用原来的资料。',409);
+      const b=await body(r),key=await authAttempt(r,q),nickname=str(b.nickname,20,true),nonce=b.startNonce;
+      if(typeof nonce!=='string'||!/^[a-f0-9]{64}$/.test(nonce))problem('名片准备未完成，请在页面重试。');
+      const derived=await digest('start-account-v1:'+nonce),accountId=derived.slice(0,8)+'-'+derived.slice(8,12)+'-4'+derived.slice(13,16)+'-8'+derived.slice(17,20)+'-'+derived.slice(20,32);
+      if(auth.account&&auth.account.id!==accountId)problem('本设备已记住另一个账号，请先退出，或用本人恢复码切换。',409);
+      const recovery=await recoveryFromCanonical((await digest('start-recovery-v1:'+nonce)).slice(0,40)),account={id:accountId,display_name:nickname},first=await newAccountSession(account);
+      // A private browser nonce makes a lost first reply retryable without
+      // another account. Rotation blocks reuse through the conditional insert.
+      const saved=await q.batch([
+        ['INSERT INTO accounts(id,display_name,recovery_hash,created_at) VALUES(?,?,?,?) ON CONFLICT(id) DO NOTHING',accountId,nickname,recovery.hash,first.createdAt],
+        ['INSERT INTO account_sessions(session_hash,account_id,expires_at,created_at) SELECT ?,?,?,? WHERE EXISTS(SELECT 1 FROM accounts WHERE id=? AND recovery_hash=?)',first.hash,first.accountId,first.expiresAt,first.createdAt,accountId,recovery.hash]
+      ]);
+      if(!saved[1].meta.changes)problem('这份注册准备已失效，请使用最新恢复码找回名片。',401);
+      const current=await q.one('SELECT id,display_name FROM accounts WHERE id=?',accountId);
+      await clearAuthAttempts(q,key);return accountSessionResponse(r,url,current,first.token,201,{recoveryCode:recovery.code});
+    }
     if(url.pathname==='/api/auth/signup'&&r.method==='POST'){
       if(auth.hash&&!auth.account&&await q.one('SELECT id FROM members WHERE session_hash=? AND account_id IS NULL AND removed_at IS NULL',auth.hash))problem('本设备已有原名片，请先保存原身份，再绑定邮箱和密码。',409);
       const b=await body(r),key=await authAttempt(r,q),email=emailInput(b.email),password=passwordInput(b.password),salt=secret(16),now=new Date().toISOString();

@@ -1,4 +1,20 @@
 function privateViewGuard(){const epoch=state.epoch,clubId=state.board?.club.id,accountId=state.account?.id;return ()=>epoch===state.epoch&&clubId===state.board?.club.id&&accountId===state.account?.id;}
+let quickStartMemory=null;
+function quickStartKey(){return accountSessionKey+':start';}
+function readQuickStart(){try{const value=JSON.parse(sessionStorage.getItem(quickStartKey())||'null');if(value&&validToken(value.startNonce)&&typeof value.nickname==='string')return value;}catch{}return quickStartMemory;}
+function clearQuickStart(){quickStartMemory=null;try{sessionStorage.removeItem(quickStartKey());}catch{}}
+function prepareQuickStart(nickname){const previous=readQuickStart(),value={nickname,startNonce:previous?.startNonce||[...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('')};try{sessionStorage.setItem(quickStartKey(),JSON.stringify(value));}catch{throw new Error('浏览器暂时无法保存名片准备，请换一个浏览器或开启网站存储后重试。');}quickStartMemory=value;return value;}
+function openAccess(){
+  modal('进入网球小本本',`<p>第一次使用，只需填写昵称，保存一份私密恢复码。以后这个浏览器会自动记住你。</p>${state.account?`<p>当前记住：<strong>${esc(state.account.displayName)}</strong></p>`:''}<div class="form-actions"><button class="primary" data-action="quick-signup">第一次使用，填写昵称</button><button class="secondary" data-action="recovery-login">用恢复码找回我的名片</button></div><details class="auth-links"><summary>以前用邮箱登录的账号</summary><button class="text-button" data-action="email-login">用原邮箱和密码登录</button></details>`);
+}
+function openQuickAuth(){
+  if(!state.account&&state.clubs.length){const old=state.clubs[0];modal('继续使用你的原名片',`<p>本设备还有 <strong>${esc(old.nickname)}</strong> 的原名片。保存原身份后，用私密恢复码就能在其他设备找回，原头像、记录和管理员身份保留。</p><div class="form-actions"><button class="primary" data-action="register" data-club="${esc(old.id)}">保存我的原身份</button><button class="secondary" data-action="recovery-login">用原恢复码登录</button></div>`);return;}
+  const pending=readQuickStart();
+  if(state.account&&!pending){modal('本设备已记住你的名片',`<p>当前账号：<strong>${esc(state.account.displayName)}</strong>。可以继续记球，或用另一个球友的私密恢复码切换账号。</p><div class="form-actions"><button class="primary" data-action="close">继续使用当前名片</button><button class="secondary" data-action="recovery-login">用另一份恢复码登录</button><button class="text-button" data-action="logout">退出，再新建名片</button></div>`);return;}
+  const nickname=pending?.nickname||state.createDraft?.nickname||'';
+  modal(pending?'继续保存我的名片':'给自己一张球友名片',`<form id="quick-auth-form" class="form"><p>只填昵称即可，不需要邮箱或密码。每个人的资料和记录会跟随自己的名片。</p><div><label for="quick-name">我的昵称</label><input id="quick-name" name="nickname" maxlength="20" value="${esc(nickname)}" required autocomplete="nickname"></div><p class="profile-help">接下来会显示私密恢复码，请只自己保存。换手机或清除浏览器数据后，用它找回名片。</p>${actionButtons(pending?'继续保存名片':'创建我的名片')}<div class="auth-links"><button type="button" class="text-button" data-action="recovery-login">已经有名片？用恢复码找回</button><button type="button" class="text-button" data-action="email-login">用以前的邮箱账号登录</button></div></form>`);
+  const form=$('#quick-auth-form');form.onsubmit=async e=>{e.preventDefault();await submit(form,async()=>{const input=prepareQuickStart(form.elements.nickname.value.trim()),result=await request('/api/auth/start','POST',input);if(!result.account||!normalizeRecoveryCode(result.recoveryCode))throw new Error('名片回复没有完整收到，请继续保存，原来的名片会保留。');closeDialog();await finishIdentity(result);clearQuickStart();showRecoveryCode(result.recoveryCode);});};
+}
 function openEmailAuth(mode='login'){
   const signup=mode==='signup';
   if(signup&&!state.account&&state.clubs.length){const old=state.clubs[0];modal('先保留你的原名片',`<p>本设备还保有 <strong>${esc(old.nickname)}</strong> 的原名片。先保存原身份，再在“我的账号”设置邮箱和密码，头像、记录和管理员身份会继续保留。</p><div class="form-actions"><button class="primary" data-action="register" data-club="${esc(old.id)}">保存原身份</button><button class="secondary" data-action="recovery-login">用原恢复码登录</button></div>`);return;}
@@ -12,8 +28,8 @@ function openCredentials(){
 }
 function renderInviteGate(){
   const club=state.preview.club;document.title=`加入 ${club.name} · 网球搭子`;
-  app.innerHTML=`<main class="welcome invite-gate"><div class="brand"><span class="brand-icon">🎾</span><strong>网球搭子</strong></div><section class="create-card"><p class="eyebrow">群邀请</p><h1>${esc(club.name)}</h1>${club.slogan?`<p>${esc(club.slogan)}</p>`:''}<p class="privacy-note">球员卡、打球记录和照片仅小组成员可见。</p>${state.account?`<p>当前账号：<strong>${esc(state.account.displayName)}</strong></p><form id="join-form" class="form"><div><label for="join-name">我的群昵称</label><input id="join-name" name="nickname" value="${esc(accountAlias())}" maxlength="20" required autocomplete="nickname"></div>${actionButtons('加入这群搭子')}</form><button class="text-button" data-action="email-login">切换账号</button>`:'<div class="form-actions"><button class="primary" data-action="email-signup">注册并加入</button><button class="secondary" data-action="email-login">已有账号，登录</button></div><button class="text-button" data-action="recovery-login">用原恢复码登录</button>'}<button class="text-button" data-action="home">返回我的群</button></section></main>`;
-  const form=$('#join-form');if(form)form.onsubmit=async e=>{e.preventDefault();await submit(form,async()=>{await request('/api/profile','POST',Object.fromEntries(new FormData(form)));resetView();await loadAccount();await load();toast('已加入，欢迎来记球。');});};
+  app.innerHTML=`<main class="welcome invite-gate"><div class="brand"><span class="brand-icon">🎾</span><strong>网球搭子</strong></div><section class="create-card"><p class="eyebrow">群邀请</p><h1>${esc(club.name)}</h1>${club.slogan?`<p>${esc(club.slogan)}</p>`:''}<p class="privacy-note">球员卡、打球记录和照片仅小组成员可见。</p>${state.account?`<p>当前账号：<strong>${esc(state.account.displayName)}</strong></p><form id="join-form" class="form"><div><label for="join-name">我的群昵称</label><input id="join-name" name="nickname" value="${esc(accountAlias())}" maxlength="20" required autocomplete="nickname"></div>${actionButtons('加入这群搭子')}</form><button class="text-button" data-action="login">切换账号</button>`:'<div class="form-actions"><button class="primary" data-action="quick-signup">填写昵称，建立我的名片</button><button class="secondary" data-action="recovery-login">已有恢复码，找回名片</button></div><details class="auth-links"><summary>以前用邮箱登录的账号</summary><button class="text-button" data-action="email-login">用原邮箱和密码登录</button></details>'}<button class="text-button" data-action="home">返回我的群</button></section></main>`;
+  const form=$('#join-form');if(form)form.onsubmit=async e=>{e.preventDefault();if(readQuickStart()){openQuickAuth();return;}await submit(form,async()=>{await request('/api/profile','POST',Object.fromEntries(new FormData(form)));resetView();await loadAccount();await load();toast('已加入，欢迎来记球。');});};
 }
 function monthlySection(m){
   const rows=Growth.model.data?.monthlyRatings||[],current=m.rating,previous=current?rows.filter(r=>r.month<current.month).at(-1):null;
@@ -70,8 +86,9 @@ function openAdminProfile(memberId){const stillCurrent=privateViewGuard();const 
 async function exportBackup(button){button.disabled=true;try{const response=await apiFetch('/api/export');if(!response.ok){const data=await response.json();throw new Error(data.error||'备份下载失败');}const blob=await response.blob(),url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=`网球搭子备份-${state.board.today}.ndjson`;link.click();setTimeout(()=>URL.revokeObjectURL(url),30000);toast('完整备份已下载，包含月度历史和照片。');}catch(e){toast(e.message);}finally{button.disabled=false;}}
 document.addEventListener('click',async e=>{
   const button=e.target.closest('[data-action]');if(!button||button.disabled)return;const action=button.dataset.action;
-  if(action==='email-login')openEmailAuth('login');
-  else if(action==='email-signup')openEmailAuth('signup');
+  if(action==='quick-signup')openQuickAuth();
+  else if(action==='email-login')openEmailAuth('login');
+  else if(action==='email-signup')openQuickAuth();
   else if(action==='recovery-login')openRecoveryLogin();
   else if(action==='credentials')openCredentials();
   else if(action==='monthly-rating')await openMonthlyRatings(button.dataset.month);
