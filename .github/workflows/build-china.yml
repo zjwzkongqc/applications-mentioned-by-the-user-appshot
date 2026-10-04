@@ -1,6 +1,7 @@
 name: Build complete China server package
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [main]
     paths:

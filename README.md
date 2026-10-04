@@ -8,6 +8,8 @@ https://zjwzkongqc.github.io/applications-mentioned-by-the-user-appshot/
 
 该入口及当前 `chatgpt.site` 后台尚未通过中国内地无 VPN 访问验收。国内直连版本采用 **GitHub 管理代码和构建，国内服务器同域运行网页、账号和照片后台**；完整离线部署包与 [国内部署说明](docs/china-deployment.md) 已加入仓库。尚未接入国内服务器、完成原数据迁移或切换分享网址。
 
+[国内自动部署工作流](https://github.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/actions/workflows/deploy-china.yml) 检查服务器接入，配置齐备后直接上传完整部署包并验证 HTTPS 发布版本。接入缺失会明确报告缺项，首次保持维护模式，等待完整原数据导入和国内手机验收。
+
 点击“邀请搭子 → 复制群邀请链接”后分享到微信群。邀请七天有效，只展示小组名称与口号；球友登录并主动加入后，才能查看组内名片、记录与照片。成员修改自己的内容，后台验证成员关系和归属。
 
 六维指标为正手稳定性、反手稳定性、发球控制、接发球能力、网前截击、移动与回位，每项 0–10 分，也可单独保留“待测”。月度球员卡逐月保存，与自己的上次比较，0 分与待测分开记录。

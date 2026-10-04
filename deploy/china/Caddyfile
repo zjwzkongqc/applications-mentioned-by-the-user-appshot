@@ -1,4 +1,5 @@
 {$TENNIS_HOSTNAME} {
     encode zstd gzip
+    header X-Tennis-Release {$TENNIS_RELEASE}
     reverse_proxy app:3000
 }

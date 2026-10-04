@@ -1,0 +1,70 @@
+name: Deploy complete application to China server
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-china.yml
+      - scripts/china-config.mjs
+      - scripts/deploy-china.mjs
+      - deploy/china/remote-deploy.sh
+      - test/china-deploy.test.mjs
+permissions:
+  contents: read
+concurrency:
+  group: china-production
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      ready: ${{ steps.connection.outputs.ready }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - name: Verify deployment boundaries
+        run: node --test test/china-deploy.test.mjs
+      - name: Check server connection without exposing values
+        id: connection
+        env:
+          CHINA_HOST: ${{ vars.CHINA_HOST }}
+          CHINA_SSH_USER: ${{ vars.CHINA_SSH_USER }}
+          CHINA_SSH_PORT: ${{ vars.CHINA_SSH_PORT }}
+          CHINA_DOMAIN: ${{ vars.CHINA_DOMAIN }}
+          CHINA_SSH_PRIVATE_KEY: ${{ secrets.CHINA_SSH_PRIVATE_KEY }}
+          CHINA_SSH_KNOWN_HOSTS: ${{ secrets.CHINA_SSH_KNOWN_HOSTS }}
+        run: node scripts/china-config.mjs
+  package:
+    needs: preflight
+    if: needs.preflight.outputs.ready == 'true'
+    uses: ./.github/workflows/build-china.yml
+  deploy:
+    needs: [preflight, package]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - uses: actions/download-artifact@v4
+        with:
+          name: tennis-china-linux-amd64
+          path: dist
+      - name: Deploy verified package and keep existing data volumes
+        env:
+          TENNIS_RELEASE: ${{ github.sha }}
+          CHINA_HOST: ${{ vars.CHINA_HOST }}
+          CHINA_SSH_USER: ${{ vars.CHINA_SSH_USER }}
+          CHINA_SSH_PORT: ${{ vars.CHINA_SSH_PORT }}
+          CHINA_DOMAIN: ${{ vars.CHINA_DOMAIN }}
+          CHINA_SSH_PRIVATE_KEY: ${{ secrets.CHINA_SSH_PRIVATE_KEY }}
+          CHINA_SSH_KNOWN_HOSTS: ${{ secrets.CHINA_SSH_KNOWN_HOSTS }}
+        run: node scripts/deploy-china.mjs

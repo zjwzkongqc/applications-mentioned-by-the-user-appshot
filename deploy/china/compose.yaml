@@ -23,6 +23,7 @@ services:
     restart: unless-stopped
     environment:
       TENNIS_HOSTNAME: ${TENNIS_HOSTNAME:?Set the public hostname}
+      TENNIS_RELEASE: ${TENNIS_RELEASE:?Choose the built release}
     ports:
       - "80:80"
       - "443:443"
