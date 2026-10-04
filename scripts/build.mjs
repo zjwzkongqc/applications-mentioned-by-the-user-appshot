@@ -1,0 +1,12 @@
+import fs from 'node:fs/promises';
+const html=await fs.readFile('src/index.html','utf8');
+const css=await fs.readFile('src/style.css','utf8');
+const js=await fs.readFile('src/app.js','utf8');
+const hexJs=await fs.readFile('src/hexagon.js','utf8');
+const growthJs=await fs.readFile('src/growth.js','utf8');
+const worker=await fs.readFile('src/worker.js','utf8');
+await fs.mkdir('dist/server', {recursive:true});
+await fs.writeFile('dist/server/index.js',worker.replace('/*__ASSETS__*/',`const HTML=${JSON.stringify(html)};const CSS=${JSON.stringify(css)};const JS=${JSON.stringify(js)};const HEX_JS=${JSON.stringify(hexJs)};const GROWTH_JS=${JSON.stringify(growthJs)};`));
+const config=JSON.parse(await fs.readFile('wrangler.json','utf8'));
+await fs.writeFile('dist/server/wrangler.json',JSON.stringify({...config,main:'index.js'},null,2));
+console.log('Built Cloudflare Worker with shared records and avatar storage.');

@@ -1,0 +1,20 @@
+{
+  "name": "tennis-club",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "db:generate": "drizzle-kit generate",
+    "dev": "wrangler dev --config dist/server/wrangler.json --persist-to .wrangler/state --ip 127.0.0.1 --port 5173",
+    "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.json --persist-to .wrangler/state",
+    "configure:cloudflare": "node scripts/configure-cloudflare.mjs",
+    "check": "node --check src/worker.js && node --check src/app.js && node --check src/hexagon.js && node --check src/growth.js && node --check scripts/configure-cloudflare.mjs && node --check scripts/provision-cloudflare.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "drizzle-kit": "0.31.8",
+    "drizzle-orm": "0.44.7",
+    "wrangler": "4.45.0"
+  }
+}

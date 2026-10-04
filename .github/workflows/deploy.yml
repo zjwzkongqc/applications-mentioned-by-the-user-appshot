@@ -1,0 +1,75 @@
+name: Deploy tennis club
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tennis-club-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CF_ACCOUNT_ID: ${{ vars.CF_ACCOUNT_ID }}
+      CF_D1_DATABASE_ID: ${{ vars.CF_D1_DATABASE_ID }}
+      CF_D1_DATABASE_NAME: ${{ vars.CF_D1_DATABASE_NAME }}
+      CF_R2_BUCKET_NAME: ${{ vars.CF_R2_BUCKET_NAME }}
+      CF_WORKER_NAME: ${{ vars.CF_WORKER_NAME }}
+      WRANGLER_SEND_METRICS: 'false'
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Check source
+        run: npm run check
+
+      - name: Verify deployment provisioning
+        run: npm test
+
+      - name: Build application
+        run: npm run build
+
+      - name: Locate or create Cloudflare resources
+        id: provision
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_DEPLOY_EVENT: ${{ github.event_name }}
+        run: node scripts/provision-cloudflare.mjs
+
+      - name: Generate production configuration
+        if: steps.provision.outputs.configured == 'true'
+        run: node scripts/configure-cloudflare.mjs
+
+      - name: Validate Worker bundle
+        if: steps.provision.outputs.configured == 'true'
+        run: npx --no-install wrangler deploy --config dist/server/wrangler.production.json --dry-run
+
+      - name: Apply database migrations
+        if: steps.provision.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: npx --no-install wrangler d1 migrations apply DB --remote --config wrangler.production.json
+
+      - name: Publish application
+        if: steps.provision.outputs.configured == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: npx --no-install wrangler deploy --config dist/server/wrangler.production.json

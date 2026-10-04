@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.wrangler/
+.sites-runtime/
+.env
+*.tar.gz
+.env.*
+wrangler.production.json
+*.log
