@@ -1,0 +1,53 @@
+name: Verify independent fresh tennis site
+on:
+  push:
+    branches: [codex/fresh-tennis-20261004]
+    paths:
+      - 'scripts/build-fresh-pages.mjs'
+      - 'test/fresh-live-browser.mjs'
+      - '.github/workflows/fresh-verify.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fresh-tennis-verification
+  cancel-in-progress: false
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Existing source checks and tests
+        run: npm ci && npm run check && npm test
+      - name: Build original root plus separate new path
+        run: |
+          npm run build:pages
+          sha256sum dist/pages/index.html dist/pages/config.js > /tmp/original-root.sha256
+          node --check scripts/build-fresh-pages.mjs
+          node scripts/build-fresh-pages.mjs
+          sha256sum -c /tmp/original-root.sha256
+          node --check dist/pages/fresh/app.js
+          node --check test/fresh-live-browser.mjs
+      - name: Install pinned browser testing tools
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Live HTTPS and mobile browser verification
+        run: node test/fresh-live-browser.mjs
+      - name: Save non-secret verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-site-verification
+          path: |
+            fresh-live-report.json
+            fresh-welcome.png
+          if-no-files-found: ignore
+          retention-days: 7
