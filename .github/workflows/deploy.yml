@@ -40,7 +40,11 @@ jobs:
         run: npm test
 
       - name: Build GitHub Pages application
-        run: node scripts/build-pages.mjs
+        env:
+          TENNIS_API_BASE_URL: ${{ vars.TENNIS_API_BASE_URL }}
+          TENNIS_MIGRATION_FROM_ORIGIN: ${{ vars.TENNIS_MIGRATION_FROM_ORIGIN }}
+          TENNIS_MIGRATION_ID: ${{ vars.TENNIS_MIGRATION_ID }}
+        run: npm run build:pages:ci
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

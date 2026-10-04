@@ -7,3 +7,8 @@ dist/
 .env.*
 wrangler.production.json
 *.log
+private-migration/
+*.backup.json
+*.sqlite
+*.sqlite-*
+*.object

@@ -8,9 +8,13 @@
     "db:generate": "drizzle-kit generate",
     "dev": "wrangler dev --config dist/server/wrangler.json --persist-to .wrangler/state --ip 127.0.0.1 --port 5173",
     "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.json --persist-to .wrangler/state",
-    "check": "node --check src/worker.js && node --check src/app.js && node --check src/hexagon.js && node --check src/growth.js && node --check scripts/build-pages.mjs",
+    "check": "node --check src/worker.js && node --check src/app.js && node --check src/hexagon.js && node --check src/growth.js && node --check scripts/build-pages.mjs && node --check scripts/build-pages-ci.mjs && node --check scripts/build-node.mjs && node --check scripts/backup-format.mjs && node --check scripts/import-backup.mjs && node --check scripts/migration-export-worker.mjs && node --check scripts/build-migration-export.mjs && node --check server/storage.mjs && node --check server/http.mjs && node --check server/main.mjs && node --check server/migration.mjs",
     "test": "node --test test/*.test.mjs",
-    "build:pages": "node scripts/build-pages.mjs"
+    "build:pages": "node scripts/build-pages.mjs",
+    "build:pages:ci": "node scripts/build-pages-ci.mjs",
+    "build:node": "node scripts/build-node.mjs",
+    "start:backend": "node server/main.mjs",
+    "import:backup": "node scripts/import-backup.mjs"
   },
   "devDependencies": {
     "drizzle-kit": "0.31.8",
