@@ -7,21 +7,29 @@ export const accountSessions = sqliteTable('account_sessions', {
   sessionHash: text('session_hash').primaryKey(), accountId: text('account_id').notNull().references(() => accounts.id),
   expiresAt: integer('expires_at').notNull(), createdAt: text('created_at').notNull()
 }, t => [index('idx_account_sessions_account').on(t.accountId),index('idx_account_sessions_expiry').on(t.expiresAt)]);
+export const accountCredentials = sqliteTable('account_credentials', {
+  accountId: text('account_id').primaryKey().references(() => accounts.id), email: text('email').notNull(),
+  passwordHash: text('password_hash').notNull(), passwordSalt: text('password_salt').notNull(),
+  updatedAt: text('updated_at').notNull()
+}, t => [uniqueIndex('idx_account_credentials_email').on(t.email)]);
 export const authFailures = sqliteTable('auth_failures', {
   key: text('key').primaryKey(), windowStart: integer('window_start').notNull(), failures: integer('failures').notNull()
 });
 export const clubs = sqliteTable('clubs', {
   id: text('id').primaryKey(), inviteHash: text('invite_hash').notNull(),
-  name: text('name').notNull(), slogan: text('slogan').notNull(), ownerId: text('owner_id').notNull(), createdAt: text('created_at').notNull()
+  name: text('name').notNull(), slogan: text('slogan').notNull(), ownerId: text('owner_id').notNull(), createdAt: text('created_at').notNull(),
+  inviteRevokedAt: text('invite_revoked_at')
 }, t => [uniqueIndex('idx_clubs_invite_hash').on(t.inviteHash)]);
 export const clubInvites = sqliteTable('club_invites', {
-  inviteHash: text('invite_hash').primaryKey(), clubId: text('club_id').notNull().references(() => clubs.id), createdAt: text('created_at').notNull()
+  inviteHash: text('invite_hash').primaryKey(), clubId: text('club_id').notNull().references(() => clubs.id), createdAt: text('created_at').notNull(),
+  revokedAt: text('revoked_at'), expiresAt: integer('expires_at').notNull().default(0)
 }, t => [index('idx_club_invites_club').on(t.clubId)]);
 export const members = sqliteTable('members', {
   id: text('id').primaryKey(), clubId: text('club_id').notNull().references(() => clubs.id),
   accountId: text('account_id').references(() => accounts.id),
   sessionHash: text('session_hash').notNull(), nickname: text('nickname').notNull(),
-  avatarKey: text('avatar_key'), bio: text('bio').notNull(), createdAt: text('created_at').notNull()
+  avatarKey: text('avatar_key'), bio: text('bio').notNull(), createdAt: text('created_at').notNull(),
+  removedAt: text('removed_at'), publicShareHash: text('public_share_hash')
 }, t => [index('idx_members_club').on(t.clubId), uniqueIndex('idx_members_club_session').on(t.clubId, t.sessionHash), uniqueIndex('idx_members_club_account').on(t.clubId,t.accountId),index('idx_members_account').on(t.accountId)]);
 export const authRegistrations = sqliteTable('auth_registrations', {
   accountId: text('account_id').notNull().references(() => accounts.id), clubId: text('club_id').notNull().references(() => clubs.id),
@@ -40,6 +48,25 @@ export const records = sqliteTable('records', {
   trainingEffect: text('training_effect').notNull().default(''),
   effectNote: text('effect_note').notNull().default(''), nextPlan: text('next_plan').notNull().default('')
 }, t => [index('idx_records_club_date').on(t.clubId, t.playDate), index('idx_records_member').on(t.memberId)]);
+export const monthlyRatings = sqliteTable('monthly_ratings', {
+  memberId: text('member_id').notNull().references(() => members.id), month: text('month').notNull(),
+  forehand: integer('forehand'), backhand: integer('backhand'), serve: integer('serve'),
+  returnSkill: integer('return_skill'), net: integer('net'), footwork: integer('footwork'),
+  createdAt: text('created_at').notNull(), updatedAt: text('updated_at').notNull()
+}, t => [primaryKey({columns:[t.memberId,t.month]})]);
+export const recordPhotos = sqliteTable('record_photos', {
+  id: text('id').primaryKey(), clubId: text('club_id').notNull().references(() => clubs.id),
+  memberId: text('member_id').notNull().references(() => members.id),
+  recordId: text('record_id').notNull().references(() => records.id,{onDelete:'cascade'}),
+  objectKey: text('object_key').notNull(), contentType: text('content_type').notNull(),
+  byteSize: integer('byte_size').notNull(), createdAt: text('created_at').notNull()
+}, t => [index('idx_record_photos_record').on(t.recordId),index('idx_record_photos_club').on(t.clubId)]);
+export const auditEvents = sqliteTable('audit_events', {
+  id: text('id').primaryKey(), clubId: text('club_id').notNull().references(() => clubs.id),
+  actorMemberId: text('actor_member_id').notNull().references(() => members.id),
+  action: text('action').notNull(), targetId: text('target_id').notNull(),
+  details: text('details').notNull(), createdAt: text('created_at').notNull()
+}, t => [index('idx_audit_events_club').on(t.clubId,t.createdAt)]);
 export const culture = sqliteTable('culture', {
   id: text('id').primaryKey(), clubId: text('club_id').notNull().references(() => clubs.id),
   memberId: text('member_id').notNull().references(() => members.id),

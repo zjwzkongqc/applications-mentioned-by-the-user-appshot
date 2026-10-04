@@ -12,77 +12,7 @@ const nonce = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toSt
 const hash = async value => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).toString('hex');
 const canonical = code => code.toLowerCase().replace(/[\s-]/g, '').replace(/^tc/, '');
 
-// Real SQLite and the checked-in migrations exercise D1's constraints, joins,
-// and transactional rollback rather than replacing queries with canned rows.
-function fixture(t) {
-  const sqlite = new DatabaseSync(':memory:');
-  sqlite.exec('PRAGMA foreign_keys = ON');
-  const migrations = new URL('../drizzle/', import.meta.url);
-  for (const name of readdirSync(migrations).filter(name => name.endsWith('.sql')).sort()) {
-    sqlite.exec(readFileSync(new URL(name, migrations), 'utf8'));
-  }
-  t.after(() => sqlite.close());
-  let failingSql;
-  let beforeSql;
-  const prepared = (sql, values = []) => ({
-    bind(...bound) { return prepared(sql, bound); },
-    async first(column) {
-      const row = sqlite.prepare(sql).get(...values);
-      return row ? column ? row[column] : { ...row } : null;
-    },
-    async all() { return { results: sqlite.prepare(sql).all(...values).map(row => ({ ...row })), success: true }; },
-    async run() {
-      if (beforeSql?.pattern.test(sql)) { const action = beforeSql.action; beforeSql = undefined; action(sqlite); }
-      if (failingSql?.test(sql)) { failingSql = undefined; throw new Error('Injected D1 write failure'); }
-      const result = sqlite.prepare(sql).run(...values);
-      return { success: true, meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid) } };
-    }
-  });
-  const env = { DB: {
-    prepare: sql => prepared(sql),
-    async batch(statements) {
-      sqlite.exec('BEGIN');
-      try {
-        const results = [];
-        for (const statement of statements) results.push(await statement.run());
-        sqlite.exec('COMMIT');
-        return results;
-      } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
-    }
-  } };
-  let ip = 1;
-  async function call(path, { method = 'GET', token, accountToken, invite, body, origin = PAGES, headers: extraHeaders = {}, address } = {}) {
-    const headers = { Origin: origin, 'CF-Connecting-IP': address || `192.0.2.${ip}`, ...extraHeaders };
-    if (token) headers['X-Tennis-Session'] = token;
-    if (accountToken) headers['X-Tennis-Session'] = accountToken;
-    if (invite) headers.Authorization = `Bearer ${invite}`;
-    if (body !== undefined) headers['Content-Type'] = 'application/json';
-    const response = await worker.fetch(new Request(API + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) }), env);
-    return { response, status: response.status, data: await response.json() };
-  }
-  async function createClub(nickname = 'Chris') {
-    ip++;
-    const created = await call('/api/clubs', { method: 'POST', body: { name: `长期成长 ${ip}`, slogan: '一起挥拍', nickname } });
-    assert.equal(created.status, 201, JSON.stringify(created.data));
-    const { invite, sessionToken: token } = created.data;
-    assert.match(token, /^[a-f0-9]{64}$/);
-    const board = await call('/api/board', { invite, token });
-    assert.equal(board.status, 200);
-    return { invite, token, clubId: board.data.club.id, memberId: board.data.me, registrationNonce: nonce() };
-  }
-  async function enableRecovery(club) {
-    const enabled = await call('/api/auth/register', { method: 'POST', invite: club.invite, token: club.token, body: { registrationNonce: club.registrationNonce } });
-    assert.equal(enabled.status, 200, JSON.stringify(enabled.data));
-    assert.match(enabled.data.recoveryCode, CODE_PATTERN);
-    assert.match(enabled.data.sessionToken, /^[a-f0-9]{64}$/);
-    return { accountToken: enabled.data.sessionToken, recoveryCode: enabled.data.recoveryCode, account: enabled.data.account };
-  }
-  const login = (recoveryCode, options = {}) => call('/api/auth/login', { method: 'POST', body: { recoveryCode }, ...options });
-  return { call, createClub, enableRecovery, login, sqlite,
-    failOnce: pattern => { failingSql = pattern; },
-    beforeOnce: (pattern, action) => { beforeSql = { pattern, action }; }
-  };
-}
+import { fixture } from './helpers.mjs';
 
 test('private recovery restores original owner, records, checkins, and avatar on another device', async t => {
   const f = fixture(t), club = await f.createClub();
@@ -129,7 +59,7 @@ test('private recovery restores original owner, records, checkins, and avatar on
   assert.equal(growth.data.nextPlan.next_plan, '反手接发球');
   assert.equal((await f.call(`/api/records/${recordId}?club=${club.clubId}`, { method: 'PATCH', accountToken: restoredToken, body: { ...record, note: '换设备后继续复盘' } })).status, 200);
   assert.equal((await f.call(`/api/club?club=${club.clubId}`, { method: 'PATCH', accountToken: restoredToken, body: { name: '继续成长', slogan: '一起挥拍' } })).status, 200);
-  assert.equal((await f.call('/api/board', club)).data.me, null);
+  assert.equal((await f.call('/api/board', club)).status, 401);
   assert.equal((await f.call('/api/growth', club)).status, 401);
   assert.equal((await f.call(`/api/records/${recordId}`, { method: 'DELETE', ...club })).status, 401);
   assert.equal((await f.call('/api/profile', { method: 'POST', ...club, body: { nickname: '旧 token 不应改名', bio: '' } })).status, 401);
@@ -212,7 +142,7 @@ test('binding requires exact legacy proof and cannot merge same-name or already-
   assert.equal(restored.data.me, second.memberId);
   assert.equal(restored.data.club.ownerId, second.memberId);
   assert.equal((await f.call(`/api/auth/bind?club=${second.clubId}`, { method: 'POST', accountToken: saved.accountToken, body: { legacySessionToken: second.token } })).status, 401);
-  const duplicate = await f.call('/api/profile', { method: 'POST', invite: first.invite, body: { nickname: '同名球友', bio: '' } });
+  const duplicate = await f.createLegacyMember(first.clubId,'同名球友');
   assert.equal(duplicate.status, 201);
   assert.notEqual(duplicate.data.id, first.memberId);
   const recordId = crypto.randomUUID();
@@ -233,10 +163,11 @@ test('additional invites preserve old links without transferring owner identity'
   assert.match(issued.data.invite, /^[a-f0-9]{64}$/);
   assert.notEqual(issued.data.invite, club.invite);
   for (const invite of [club.invite, issued.data.invite]) {
-    const board = await f.call('/api/board', { invite });
+    const board = await f.call('/api/invitation', { invite });
     assert.equal(board.status, 200);
     assert.equal(board.data.club.id, club.clubId);
-    assert.equal(board.data.me, null);
+    assert.equal(board.data.joined, false);
+    assert.equal((await f.call('/api/board',{invite})).status,401);
     assert.equal((await f.call('/api/invite', { method: 'POST', invite, body: {} })).status, 401);
     assert.equal((await f.call('/api/board', { invite, accountToken: saved.accountToken })).data.me, club.memberId);
   }
@@ -285,7 +216,7 @@ test('legacy root recovery enables its original member without reconstructing an
   const identity = await f.call('/api/auth/me', { token: club.token });
   assert.equal(identity.data.account, null);
   assert.equal(identity.data.clubs[0].id, club.clubId);
-  assert.equal((await f.call(`/api/board?club=${club.clubId}`, { token: club.token })).status, 401);
+  assert.equal((await f.call(`/api/board?club=${club.clubId}`, { token: club.token })).data.me, club.memberId);
   const enabled = await f.call(`/api/auth/register?club=${club.clubId}`, { method: 'POST', token: club.token, body: { registrationNonce: club.registrationNonce } });
   assert.equal(enabled.status, 200);
   assert.match(enabled.data.recoveryCode, CODE_PATTERN);
@@ -298,10 +229,7 @@ test('legacy root recovery enables its original member without reconstructing an
 
 test('enabling recovery for one legacy group retains proof to bind another original group', async t => {
   const f = fixture(t), first = await f.createClub();
-  const created = await f.call('/api/clubs', { method: 'POST', token: first.token, body: { name: '第二本原群', slogan: '', nickname: '第二群原群主' } });
-  assert.equal(created.data.sessionToken, first.token);
-  const secondBoard = await f.call('/api/board', { invite: created.data.invite, token: first.token });
-  const second = { invite: created.data.invite, clubId: secondBoard.data.club.id, memberId: secondBoard.data.me };
+  const second = await f.createClub('第二群原群主',first.token);
   const enabled = await f.call('/api/auth/register', { method: 'POST', invite: first.invite, origin: API, headers: { Cookie: `tc_session=${first.token}` }, body: { registrationNonce: first.registrationNonce } });
   assert.equal(enabled.status, 200);
   assert.equal(enabled.data.sessionToken, undefined);
@@ -480,10 +408,10 @@ test('an original-site backup cookie recovers a lost body only for the same acco
     assert.equal(denied.data.recoveryCode, undefined);
   }
   assert.deepEqual((await f.call('/api/auth/me', { origin: API, headers: { Cookie: backup } })).data, { account: null, clubs: [] });
-  assert.equal((await f.call('/api/board', { invite: club.invite, origin: API, headers: { Cookie: backup } })).data.me, null);
+  assert.equal((await f.call('/api/board', { invite: club.invite, origin: API, headers: { Cookie: backup } })).status, 401);
   assert.equal((await f.call('/api/growth', { invite: club.invite, origin: API, headers: { Cookie: backup } })).status, 401);
   const bridge = await f.call('/api/pages-session', { method: 'POST', invite: club.invite, origin: API, headers: { Cookie: backup } });
-  assert.equal(bridge.status, 403);
+  assert.equal(bridge.status, 401);
   const logout = await f.call('/api/auth/logout', { method: 'POST', origin: API, headers: { Cookie: currentAndBackup }, body: {} });
   assert.equal(logout.status, 200);
   assert.match(logout.response.headers.get('Set-Cookie'), /tc_session=;[^,]*Max-Age=0/);

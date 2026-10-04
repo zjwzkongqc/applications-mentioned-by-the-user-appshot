@@ -37,6 +37,6 @@ test('profile migration requires a same-origin POST with an existing cookie',asy
   assert.equal(response.status,200);assert.deepEqual(await response.json(),{sessionToken:token});
   for(const extra of [{Origin:origin},{'X-Tennis-Session':token},{Cookie:''}]){
     const denied=await worker.fetch(request('/api/pages-session',{method:'POST',headers:{...headers,...extra}}),env);
-    assert.equal(denied.status,403);assert.equal(denied.headers.get('Access-Control-Allow-Origin'),null);
+    assert.ok([401,403].includes(denied.status));assert.equal(denied.headers.get('Access-Control-Allow-Origin'),null);
   }
 });

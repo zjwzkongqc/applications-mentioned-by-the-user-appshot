@@ -7,6 +7,7 @@ const root = fileURLToPath(new URL('../', import.meta.url));
 export const LEGACY_API_ORIGIN = 'https://tennis-dazi-club-2026.divine-seal-5110.chatgpt.site';
 export const PAGES_BASE_URL = 'https://zjwzkongqc.github.io/applications-mentioned-by-the-user-appshot/';
 export const APP_ID = 'tennis-dazi-club-2026';
+export const SUPABASE_API_PREFIX = '/functions/v1/tennis-api';
 
 // Only a public HTTPS origin belongs in the shipped config and connect-src.
 // Reject URL components rather than silently dropping credentials or paths.
@@ -34,13 +35,17 @@ export function getPagesConfig(env = process.env) {
   if (explicitApi && /(?:^|\.)chatgpt\.site$/.test(new URL(apiBaseUrl).hostname)) {
     throw new Error('The replacement API must use its new HTTPS hostname, outside chatgpt.site.');
   }
-  const config = { apiBaseUrl, pageBaseUrl: PAGES_BASE_URL };
+  const apiPathPrefix = env.TENNIS_API_PATH_PREFIX === undefined ? '' : env.TENNIS_API_PATH_PREFIX;
+  if (!['', SUPABASE_API_PREFIX].includes(apiPathPrefix)) {
+    throw new Error('TENNIS_API_PATH_PREFIX must be empty or /functions/v1/tennis-api.');
+  }
+  const config = { apiBaseUrl, apiPathPrefix, pageBaseUrl: PAGES_BASE_URL };
   const from = env.TENNIS_MIGRATION_FROM_ORIGIN, migrationId = env.TENNIS_MIGRATION_ID;
   if (from !== undefined || migrationId !== undefined) {
     if (!explicitApi || validateApiOrigin(from) !== LEGACY_API_ORIGIN || !/^[a-f0-9]{64}$/.test(migrationId || '')) {
       throw new Error('Credential migration requires the explicit new API origin, the trusted legacy origin, and a 64-character lowercase hex migration ID.');
     }
-    config.credentialMigration = { appId: APP_ID, schemaVersion: 4, fromApiOrigin: LEGACY_API_ORIGIN, migrationId };
+    config.credentialMigration = { appId: APP_ID, schemaVersion: 5, fromApiOrigin: LEGACY_API_ORIGIN, migrationId };
   }
   return config;
 }

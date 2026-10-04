@@ -19,22 +19,55 @@ const ADMIN = '9'.repeat(64);
 const TIME = '2026-10-04T10:00:00.000Z';
 const id = number => `00000000-0000-4000-8000-${String(number).padStart(12, '0')}`;
 const PNG = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 0, 7, 9]);
+const JPEG = Uint8Array.from([255, 216, 255, 224, 0, 0, 0, 0, 0, 0, 7, 9, 1, 2]);
+const WEBP = Uint8Array.from(Buffer.from('RIFF0000WEBP-original-photo'));
 const avatarKey = `avatars/${id(2)}/${id(3)}/${id(4)}`;
+const photoKey = `photos/${id(2)}/${id(3)}/${id(11)}`;
+const removedPhotoKey = `photos/${id(2)}/${id(8)}/${id(12)}`;
+const webpPhotoKey = `photos/${id(2)}/${id(3)}/${id(13)}`;
+const mediaFixture = new Map([
+  [avatarKey, { bytes: PNG, contentType: 'image/png' }],
+  [photoKey, { bytes: PNG, contentType: 'image/png' }],
+  [removedPhotoKey, { bytes: JPEG, contentType: 'image/jpeg' }],
+  [webpPhotoKey, { bytes: WEBP, contentType: 'image/webp' }]
+]);
 
 function sourceTables() {
   const history = '完整历史感想，不截断。\n🎾'.repeat(2000);
+  const record = { id: id(5), club_id: id(2), member_id: id(3), play_date: '2026-10-04', minutes: 120, partners: history, venue: '原球场', mood: '认真练球', note: history, created_at: TIME, forehand: 0, backhand: null, serve: 7, net: 8, footwork: 9, return_skill: null, training_projects: '["backhand","serve"]', training_content: history, training_effect: 'improved', effect_note: history, next_plan: history };
   return {
     accounts: [{ id: id(1), display_name: '原球友', recovery_hash: 'a'.repeat(64), created_at: TIME }],
-    clubs: [{ id: id(2), invite_hash: 'b'.repeat(64), name: '原微信群', slogan: history, owner_id: id(3), created_at: TIME }],
-    members: [{ id: id(3), club_id: id(2), session_hash: 'c'.repeat(64), nickname: '原球友', avatar_key: avatarKey, bio: history, created_at: TIME, account_id: id(1) }],
+    account_credentials: [{ account_id: id(1), email: 'original@tennis.example', password_hash: '7'.repeat(64), password_salt: '8'.repeat(32), updated_at: TIME }],
+    clubs: [{ id: id(2), invite_hash: 'b'.repeat(64), name: '原微信群', slogan: history, owner_id: id(3), created_at: TIME, invite_revoked_at: TIME }],
+    members: [
+      { id: id(3), club_id: id(2), session_hash: 'c'.repeat(64), nickname: '原球友', avatar_key: avatarKey, bio: history, created_at: TIME, account_id: id(1), removed_at: null, public_share_hash: '6'.repeat(64) },
+      { id: id(8), club_id: id(2), session_hash: '1'.repeat(64), nickname: '已移除的原球友', avatar_key: avatarKey, bio: history, created_at: TIME, account_id: null, removed_at: TIME, public_share_hash: null }
+    ],
     account_sessions: [{ session_hash: 'd'.repeat(64), account_id: id(1), expires_at: 1791108000000, created_at: TIME }],
-    club_invites: [{ invite_hash: 'e'.repeat(64), club_id: id(2), created_at: TIME }],
+    club_invites: [
+      { invite_hash: 'e'.repeat(64), club_id: id(2), created_at: TIME, revoked_at: null, expires_at: 1791708000000 },
+      { invite_hash: '2'.repeat(64), club_id: id(2), created_at: TIME, revoked_at: TIME, expires_at: 1791100800000 }
+    ],
     auth_failures: [{ key: 'ip:' + 'f'.repeat(64), window_start: 1791100800000, failures: 29 }],
     auth_registrations: [{ account_id: id(1), club_id: id(2), legacy_hash: 'c'.repeat(64), nonce_hash: '0'.repeat(64), expires_at: 1791104400000 }],
-    records: [{ id: id(5), club_id: id(2), member_id: id(3), play_date: '2026-10-04', minutes: 120, partners: history, venue: '原球场', mood: '认真练球', note: history, created_at: TIME, forehand: 5, backhand: 6, serve: 7, net: 8, footwork: 9, return_skill: 10, training_projects: '["backhand","serve"]', training_content: history, training_effect: 'improved', effect_note: history, next_plan: history }],
+    records: [record, { ...record, id: id(10), member_id: id(8), play_date: '2026-08-01', note: history + '保留已移除成员的原记录。' }],
+    monthly_ratings: [
+      { member_id: id(3), month: '2026-09', forehand: 0, backhand: null, serve: 7, return_skill: null, net: 8, footwork: 9, created_at: TIME, updated_at: TIME },
+      { member_id: id(3), month: '2026-10', forehand: null, backhand: 0, serve: 8, return_skill: 4, net: null, footwork: 10, created_at: TIME, updated_at: TIME },
+      { member_id: id(8), month: '2026-08', forehand: 0, backhand: null, serve: null, return_skill: null, net: null, footwork: 0, created_at: TIME, updated_at: TIME }
+    ],
+    record_photos: [
+      { id: id(11), club_id: id(2), member_id: id(3), record_id: id(5), object_key: photoKey, content_type: 'image/png', byte_size: PNG.length, created_at: TIME },
+      { id: id(12), club_id: id(2), member_id: id(8), record_id: id(10), object_key: removedPhotoKey, content_type: 'image/jpeg', byte_size: JPEG.length, created_at: TIME },
+      { id: id(13), club_id: id(2), member_id: id(3), record_id: id(5), object_key: webpPhotoKey, content_type: 'image/webp', byte_size: WEBP.length, created_at: TIME }
+    ],
+    audit_events: [
+      { id: id(14), club_id: id(2), actor_member_id: id(3), action: 'remove-member', target_id: id(8), details: '{"reason":"原始管理记录", "保留原空格": true}', created_at: TIME },
+      { id: id(15), club_id: id(2), actor_member_id: id(3), action: 'edit-rating', target_id: id(3), details: '{"month":"2026-09","scores":{"forehand":0,"backhand":null}}', created_at: TIME }
+    ],
     culture: [{ id: id(6), club_id: id(2), member_id: id(3), content: history, created_at: TIME }],
-    cheers: [{ record_id: id(5), member_id: id(3), emoji: '🎾' }],
-    checkins: [{ id: id(7), club_id: id(2), member_id: id(3), checkin_date: '2026-10-04', created_at: TIME }]
+    cheers: [{ record_id: id(5), member_id: id(3), emoji: '🎾' }, { record_id: id(10), member_id: id(8), emoji: '👏' }],
+    checkins: [{ id: id(7), club_id: id(2), member_id: id(3), checkin_date: '2026-10-04', created_at: TIME }, { id: id(16), club_id: id(2), member_id: id(8), checkin_date: '2026-08-01', created_at: TIME }]
   };
 }
 function fixture(t) {
@@ -60,7 +93,11 @@ function fixture(t) {
       } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
     }
   };
-  const BUCKET = { async get(key) { calls.avatars.push(key); return key === avatarKey ? { size: PNG.length, httpMetadata: { contentType: 'image/png' }, arrayBuffer: async () => PNG.slice().buffer } : null; } };
+  const BUCKET = { async get(key) {
+    calls.avatars.push(key);
+    const media = mediaFixture.get(key);
+    return media ? { size: media.bytes.length, httpMetadata: { contentType: media.contentType }, arrayBuffer: async () => media.bytes.slice().buffer } : null;
+  } };
   const env = { DB, BUCKET, TENNIS_MIGRATION_ADMIN_TOKEN: ADMIN, TENNIS_MIGRATION_FREEZE: '1' };
   const original = { async fetch(request, receivedEnv, context) { calls.original.push({ request, env: receivedEnv, context }); return new Response('original', { status: 207, headers: { 'Set-Cookie': 'original-cookie' } }); } };
   const wrapped = wrapMigrationExport(original);
@@ -68,7 +105,7 @@ function fixture(t) {
   return { sqlite, tables, calls, env, wrapped, original, request };
 }
 
-test('export uses one atomic eleven-table batch and preserves full rows and every referenced avatar', async t => {
+test('export uses one atomic fifteen-table batch and preserves full schema5 rows and every referenced avatar and photo', async t => {
   const f = fixture(t);
   assert.deepEqual(MIGRATION_EXPORT_TABLES, TABLE_NAMES);
   const response = await f.wrapped.fetch(f.request(), f.env);
@@ -79,12 +116,14 @@ test('export uses one atomic eleven-table batch and preserves full rows and ever
   const body = await response.text(), snapshot = JSON.parse(body), valid = validateBackup(snapshot);
   assert.equal(body.includes(ADMIN), false);
   assert.equal(snapshot.fromApiOrigin, API);
+  assert.equal(snapshot.formatVersion, 1);
+  assert.equal(snapshot.schemaVersion, 5);
   assert.deepEqual(snapshot.tables, f.tables);
-  assert.equal(valid.avatarCount, 1);
-  assert.deepEqual(snapshot.avatars, [{ key: avatarKey, contentType: 'image/png', dataBase64: Buffer.from(PNG).toString('base64'), sha256: sha256(PNG) }]);
+  assert.equal(valid.avatarCount, mediaFixture.size);
+  assert.deepEqual(snapshot.avatars, [...mediaFixture].map(([key, media]) => ({ key, contentType: media.contentType, dataBase64: Buffer.from(media.bytes).toString('base64'), sha256: sha256(media.bytes) })));
   assert.deepEqual(f.calls.prepared, TABLE_NAMES.map(table => `SELECT * FROM ${table}`));
   assert.equal(f.calls.batches, 1);
-  assert.deepEqual(f.calls.avatars, [avatarKey]);
+  assert.deepEqual(f.calls.avatars, [...mediaFixture.keys()]);
   assert.equal(f.calls.original.length, 0);
 });
 
@@ -103,6 +142,7 @@ test('missing, malformed, mismatched, and browser-supplied admin credentials mak
     [f.env, f.request({ Cookie: `tc_session=${ADMIN}` })],
     [f.env, f.request({ Authorization: `Bearer ${ADMIN}` })],
     [f.env, f.request({ 'X-Tennis-Session': ADMIN })],
+    [f.env, f.request({}, 'POST', ROUTE + '?admin=' + ADMIN)],
     [f.env, new Request(API + ROUTE + '?admin=' + ADMIN, { method: 'POST', body: JSON.stringify({ token: ADMIN }) })],
     [f.env, f.request({}, 'GET')],
     [f.env, f.request({}, 'OPTIONS')]
@@ -127,7 +167,7 @@ test('admin export requires the exact freeze flag before reading either storage 
   assert.deepEqual(f.calls, { prepared: [], batches: 0, avatars: [], original: [] });
 });
 
-test('missing or invalid avatar bodies fail closed without partial snapshots or diagnostic leaks', async t => {
+test('missing or invalid media bodies fail closed without partial snapshots or diagnostic leaks', async t => {
   const f = fixture(t);
   const logs = t.mock.method(console, 'error', () => {});
   const cases = [
@@ -149,15 +189,45 @@ test('missing or invalid avatar bodies fail closed without partial snapshots or 
   assert.equal(logs.mock.callCount(), 0);
 });
 
-test('duplicate avatar references are exported once and unused objects are never requested', async t => {
+test('avatar and photo keys are deduplicated across active and removed members without requesting unused objects', async t => {
   const f = fixture(t);
-  f.sqlite.prepare('INSERT INTO members(id,club_id,session_hash,nickname,avatar_key,bio,created_at,account_id) VALUES(?,?,?,?,?,?,?,NULL)').run(id(8), id(2), '1'.repeat(64), '另一位原球友', avatarKey, '', TIME);
+  f.sqlite.prepare('INSERT INTO members(id,club_id,session_hash,nickname,avatar_key,bio,created_at,account_id,removed_at,public_share_hash) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL)').run(id(20), id(2), '3'.repeat(64), '另一位原球友', photoKey, '', TIME);
+  f.sqlite.prepare('INSERT INTO record_photos(id,club_id,member_id,record_id,object_key,content_type,byte_size,created_at) VALUES(?,?,?,?,?,?,?,?)').run(id(21), id(2), id(3), id(5), avatarKey, 'image/png', PNG.length, TIME);
   const response = await f.wrapped.fetch(f.request(), f.env), snapshot = await response.json();
   assert.equal(response.status, 200);
-  assert.equal(snapshot.tables.members.length, 2);
-  assert.equal(snapshot.avatars.length, 1);
-  assert.deepEqual(f.calls.avatars, [avatarKey]);
-  assert.equal(validateBackup(snapshot).avatarCount, 1);
+  assert.equal(snapshot.tables.members.length, 3);
+  assert.equal(snapshot.tables.record_photos.length, 4);
+  assert.equal(snapshot.avatars.length, mediaFixture.size);
+  assert.deepEqual(f.calls.avatars, [...mediaFixture.keys()]);
+  assert.equal(validateBackup(snapshot).avatarCount, mediaFixture.size);
+});
+
+test('missing removed-member photos and mismatched original photo metadata refuse the entire snapshot', async t => {
+  const f = fixture(t);
+  const originalBucket = f.env.BUCKET;
+  for (const missingKey of [photoKey, removedPhotoKey, webpPhotoKey]) {
+    const response = await f.wrapped.fetch(f.request(), { ...f.env, BUCKET: { get: async key => key === missingKey ? null : originalBucket.get(key) } });
+    assert.equal(response.status, 503);
+    assert.equal((await response.text()).includes('tables'), false);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), null);
+    assert.equal(response.headers.get('Set-Cookie'), null);
+  }
+  for (const [contentType, byteSize] of [['image/jpeg', PNG.length], ['image/png', PNG.length + 1], ['text/plain', PNG.length], ['image/png', 2 * 1024 * 1024 + 1]]) {
+    f.sqlite.prepare('UPDATE record_photos SET content_type=?,byte_size=? WHERE id=?').run(contentType, byteSize, id(11));
+    const response = await f.wrapped.fetch(f.request(), f.env);
+    assert.equal(response.status, 503);
+    assert.equal((await response.text()).includes('tables'), false);
+  }
+});
+
+test('a source missing any schema5 table cannot produce an eleven-table backup', async t => {
+  const f = fixture(t);
+  f.sqlite.exec('DROP TABLE audit_events');
+  const response = await f.wrapped.fetch(f.request(), f.env);
+  assert.equal(response.status, 503);
+  assert.equal((await response.text()).includes('tables'), false);
+  assert.equal(f.calls.batches, 1);
+  assert.deepEqual(f.calls.avatars, []);
 });
 
 test('oversized table data is rejected before reading avatars and incomplete D1 batches are refused', async t => {
@@ -172,17 +242,34 @@ test('oversized table data is rejected before reading avatars and incomplete D1 
   }
 });
 
-test('combined avatar JSON cannot exceed the total 32 MiB output limit', async t => {
+test('combined media JSON cannot exceed the total 32 MiB output limit', async t => {
   const f = fixture(t);
-  f.sqlite.prepare('UPDATE records SET note=?').run('x'.repeat(28 * 1024 * 1024));
-  const secondKey = `avatars/${id(2)}/${id(8)}/${id(9)}`;
-  f.sqlite.prepare('INSERT INTO members(id,club_id,session_hash,nickname,avatar_key,bio,created_at,account_id) VALUES(?,?,?,?,?,?,?,NULL)').run(id(8), id(2), '1'.repeat(64), '第二位', secondKey, '', TIME);
+  f.sqlite.prepare('UPDATE records SET note=? WHERE id=?').run('x'.repeat(28 * 1024 * 1024), id(5));
+  const secondKey = `avatars/${id(2)}/${id(20)}/${id(21)}`;
+  f.sqlite.prepare('INSERT INTO members(id,club_id,session_hash,nickname,avatar_key,bio,created_at,account_id,removed_at,public_share_hash) VALUES(?,?,?,?,?,?,?,NULL,NULL,NULL)').run(id(20), id(2), '3'.repeat(64), '第二位', secondKey, '', TIME);
   const bytes = new Uint8Array(2 * 1024 * 1024); bytes.set(PNG);
   let requested = 0;
   const response = await f.wrapped.fetch(f.request(), { ...f.env, BUCKET: { async get() { requested++; return { size: bytes.length, httpMetadata: { contentType: 'image/png' }, arrayBuffer: async () => bytes.buffer }; } } });
   assert.equal(response.status, 503);
   assert.equal(requested, 2);
   assert.equal((await response.text()).includes('tables'), false);
+});
+
+test('freeze also blocks schema5 GET exports that append audit events while allowing their OPTIONS and normal unfreezing', async t => {
+  const f = fixture(t);
+  for (const method of ['GET', 'HEAD']) {
+    const response = await f.wrapped.fetch(new Request(API + '/api/export', { method, headers: { Origin: PAGES } }), f.env);
+    assert.equal(response.status, 503);
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), PAGES);
+    assert.equal(response.headers.get('Cache-Control'), 'no-store');
+    assert.equal(response.headers.get('Set-Cookie'), null);
+    assert.match((await response.json()).error, /迁移/);
+  }
+  assert.deepEqual(f.calls, { prepared: [], batches: 0, avatars: [], original: [] });
+  assert.equal((await f.wrapped.fetch(new Request(API + '/api/export', { method: 'OPTIONS' }), f.env)).status, 207);
+  assert.equal((await f.wrapped.fetch(new Request(API + '/api/export'), { ...f.env, TENNIS_MIGRATION_FREEZE: undefined })).status, 207);
+  assert.equal(f.calls.original.length, 2);
+  assert.equal(f.calls.batches, 0);
 });
 
 test('freeze blocks ordinary writes with readable Pages maintenance errors while preserving reads and unfreezing', async t => {
@@ -225,6 +312,9 @@ test('temporary compilation preserves assets/config and normal builds never incl
   const response = await imported.default.fetch(new Request(API + '/'), {});
   assert.equal(response.status, 200);
   assert.match(await response.text(), /网球搭子/);
+  const clubUi = await imported.default.fetch(new Request(API + '/club-ui.js'), {});
+  assert.equal(clubUi.status, 200);
+  assert.equal(await clubUi.text(), await readFile(path.join(directory, 'src/club-ui.js'), 'utf8'));
   assert.equal((await imported.default.fetch(new Request(API + ROUTE, { method: 'POST' }), {})).status, 404);
   const config = JSON.parse(await readFile(path.join(temporary, 'wrangler.json'), 'utf8'));
   assert.deepEqual(config, { ...JSON.parse(await readFile(path.join(directory, 'wrangler.json'), 'utf8')), main: 'index.js' });

@@ -130,7 +130,8 @@ export async function createBucket({ directory }) {
         if (meta.version !== 1 || !Number.isInteger(meta.size) || meta.size < 0 || meta.size > OBJECT_LIMIT || !stat.isFile() || stat.size !== offset + meta.size) throw new Error('Invalid object storage body.');
         const type = contentType(meta.contentType);
         const stream = file.createReadStream({ start: offset, autoClose: true });
-        return { body: Readable.toWeb(stream), size: meta.size, httpMetadata: { contentType: type } };
+        const body = Readable.toWeb(stream);
+        return { body, size: meta.size, httpMetadata: { contentType: type }, arrayBuffer: () => new Response(body).arrayBuffer() };
       } catch (error) { await file.close().catch(() => {}); throw error; }
     },
     async delete(key) { const target = path.join(root, objectKey(key)); let removed = true; await unlink(target).catch(error => { if (error.code !== 'ENOENT') throw error; removed = false; }); if (removed) await syncDirectory(); }

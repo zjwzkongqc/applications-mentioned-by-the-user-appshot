@@ -18,17 +18,22 @@ function snapshotFixture() {
   const avatarKey = `avatars/${id(2)}/${id(3)}/${id(4)}`;
   const tables = Object.fromEntries(TABLE_NAMES.map(table => [table, []]));
   tables.accounts = [{ id: id(1), display_name: '原球友', recovery_hash: 'a'.repeat(64), created_at: time }];
-  tables.clubs = [{ id: id(2), invite_hash: 'b'.repeat(64), name: '原微信群', slogan: longText, owner_id: id(3), created_at: time }];
-  tables.members = [{ id: id(3), club_id: id(2), session_hash: 'c'.repeat(64), nickname: '原球友', avatar_key: avatarKey, bio: longText, created_at: time, account_id: id(1) }];
+  tables.account_credentials = [{ account_id: id(1), email: 'original@example.com', password_hash: '7'.repeat(64), password_salt: '8'.repeat(32), updated_at: time }];
+  tables.clubs = [{ id: id(2), invite_hash: 'b'.repeat(64), name: '原微信群', slogan: longText, owner_id: id(3), created_at: time, invite_revoked_at: null }];
+  tables.members = [{ id: id(3), club_id: id(2), session_hash: 'c'.repeat(64), nickname: '原球友', avatar_key: avatarKey, bio: longText, created_at: time, account_id: id(1), removed_at: null, public_share_hash: '6'.repeat(64) }];
   tables.account_sessions = [{ session_hash: 'd'.repeat(64), account_id: id(1), expires_at: 1791108000000, created_at: time }];
-  tables.club_invites = [{ invite_hash: 'e'.repeat(64), club_id: id(2), created_at: time }];
+  tables.club_invites = [{ invite_hash: 'e'.repeat(64), club_id: id(2), created_at: time, revoked_at: null, expires_at: 0 }];
   tables.auth_failures = [{ key: 'ip:' + 'f'.repeat(64), window_start: 1791100800000, failures: 29 }];
   tables.auth_registrations = [{ account_id: id(1), club_id: id(2), legacy_hash: 'c'.repeat(64), nonce_hash: '0'.repeat(64), expires_at: 1791104400000 }];
-  tables.records = [{ id: id(5), club_id: id(2), member_id: id(3), play_date: '2026-10-04', minutes: 120, partners: longText, venue: '原球场', mood: '认真练球', note: longText, created_at: time, forehand: 5, backhand: 6, serve: 7, net: 8, footwork: 9, return_skill: 10, training_projects: '["backhand","serve"]', training_content: longText, training_effect: 'improved', effect_note: longText, next_plan: longText }];
+  tables.records = [{ id: id(5), club_id: id(2), member_id: id(3), play_date: '2026-10-04', minutes: 120, partners: longText, venue: '原球场', mood: '认真练球', note: longText, created_at: time, forehand: 0, backhand: null, serve: 7, net: 8, footwork: 9, return_skill: 10, training_projects: '["backhand","serve"]', training_content: longText, training_effect: 'improved', effect_note: longText, next_plan: longText }];
+  const photoKey = `photos/${id(2)}/${id(3)}/${id(11)}`, photoBytes = Buffer.concat([bytes, Buffer.from([11, 12])]);
+  tables.monthly_ratings = [{ member_id: id(3), month: '2026-10', forehand: 0, backhand: null, serve: 10, return_skill: null, net: 1, footwork: 3, created_at: time, updated_at: time }];
+  tables.record_photos = [{ id: id(11), club_id: id(2), member_id: id(3), record_id: id(5), object_key: photoKey, content_type: 'image/png', byte_size: photoBytes.length, created_at: time }];
+  tables.audit_events = [{ id: id(12), club_id: id(2), actor_member_id: id(3), action: 'revoke-invite', target_id: 'original', details: JSON.stringify({ before: longText, after: null }), created_at: time }];
   tables.culture = [{ id: id(6), club_id: id(2), member_id: id(3), content: longText, created_at: time }];
   tables.cheers = [{ record_id: id(5), member_id: id(3), emoji: '🎾' }];
   tables.checkins = [{ id: id(7), club_id: id(2), member_id: id(3), checkin_date: '2026-10-04', created_at: time }];
-  return { formatVersion: 1, appId: APP_ID, schemaVersion: 4, createdAt: time, fromApiOrigin: 'https://old.example', tables, avatars: [{ key: avatarKey, contentType: 'image/png', dataBase64: bytes.toString('base64'), sha256: sha256(bytes) }] };
+  return { formatVersion: 1, appId: APP_ID, schemaVersion: 5, createdAt: time, fromApiOrigin: 'https://old.example', tables, avatars: [{ key: avatarKey, contentType: 'image/png', dataBase64: bytes.toString('base64'), sha256: sha256(bytes) }, { key: photoKey, contentType: 'image/png', dataBase64: photoBytes.toString('base64'), sha256: sha256(photoBytes) }] };
 }
 async function fixture(t, snapshot = snapshotFixture()) {
   const root = await mkdtemp(path.join(tmpdir(), 'tennis-migration-test-'));
@@ -46,17 +51,17 @@ async function emptyDatabase(options) {
   return sha256(await readFile(path.join(options.dataDir, 'tennis.sqlite')));
 }
 
-test('all eleven tables, full historical text, credential hashes, expiry, and avatar bytes are preserved', async t => {
+test('all fifteen tables, full historical text, credential hashes, expiry, and avatar bytes are preserved', async t => {
   const f = await fixture(t); f.snapshot.checksum = snapshotChecksum(f.snapshot); await f.rewrite(f.snapshot);
   const receipt = await importBackup(f.options);
   assert.equal(receipt.sourceSnapshotSha256, sha256(await readFile(f.options.snapshotPath)));
   assert.deepEqual(Object.keys(receipt).sort(), ['formatVersion', 'appId', 'schemaVersion', 'migrationId', 'fromApiOrigin', 'toApiOrigin', 'pageBaseUrl', 'credentialsPreserved', 'sourceSnapshotSha256', 'importedAt', 'tableCounts', 'avatarCount'].sort());
-  assert.equal(receipt.credentialsPreserved, true); assert.equal(receipt.avatarCount, 1);
+  assert.equal(receipt.credentialsPreserved, true); assert.equal(receipt.avatarCount, f.snapshot.avatars.length);
   assert.deepEqual(receipt.tableCounts, Object.fromEntries(TABLE_NAMES.map(table => [table, 1])));
   assert.deepEqual(JSON.parse(await readFile(path.join(f.options.dataDir, 'migration-receipt.json'), 'utf8')), receipt);
   const sqlite = new DatabaseSync(path.join(f.options.dataDir, 'tennis.sqlite'), { readOnly: true });
   try {
-    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM _tennis_migrations').get().n, 5);
+    assert.equal(sqlite.prepare('SELECT COUNT(*) n FROM _tennis_migrations').get().n, 6);
     for (const table of TABLE_NAMES) assert.equal(canonicalStringify({ ...sqlite.prepare(`SELECT ${TABLE_COLUMNS[table].join(',')} FROM ${table}`).get() }), canonicalStringify(f.snapshot.tables[table][0]));
     assert.equal(sqlite.prepare('SELECT note FROM records').get().note, longText);
     assert.equal(sqlite.prepare('PRAGMA foreign_key_check').all().length, 0);
@@ -64,10 +69,13 @@ test('all eleven tables, full historical text, credential hashes, expiry, and av
   const bucket = await createBucket({ directory: path.join(f.options.dataDir, 'avatars') }), avatar = f.snapshot.avatars[0], restored = await bucket.get(avatar.key);
   assert.equal(restored.httpMetadata.contentType, avatar.contentType);
   assert.equal(sha256(Buffer.from(await new Response(restored.body).arrayBuffer())), avatar.sha256);
-  assert.deepEqual(await readdir(path.join(f.options.dataDir, 'avatars')), [sha256(avatar.key) + '.object']);
+  assert.deepEqual((await readdir(path.join(f.options.dataDir, 'avatars'))).sort(), f.snapshot.avatars.map(media => sha256(media.key) + '.object').sort());
+  const photo = f.snapshot.avatars[1], restoredPhoto = await bucket.get(photo.key);
+  assert.equal(restoredPhoto.httpMetadata.contentType, photo.contentType);
+  assert.equal(sha256(Buffer.from(await new Response(restoredPhoto.body).arrayBuffer())), photo.sha256);
   assert.equal((await stat(f.options.dataDir)).mode & 0o777, 0o700);
   assert.equal((await stat(path.join(f.options.dataDir, 'avatars'))).mode & 0o777, 0o700);
-  for (const filename of ['tennis.sqlite', 'migration-receipt.json', 'avatars/' + sha256(avatar.key) + '.object']) assert.equal((await stat(path.join(f.options.dataDir, filename))).mode & 0o777, 0o600);
+  for (const filename of ['tennis.sqlite', 'migration-receipt.json', ...f.snapshot.avatars.map(media => 'avatars/' + sha256(media.key) + '.object')]) assert.equal((await stat(path.join(f.options.dataDir, filename))).mode & 0o777, 0o600);
   await assertNoStage(f.root);
 });
 
@@ -82,11 +90,28 @@ test('strict format, columns, types, checksums, duplicates, and relations are re
     value => { value.tables.club_invites[0].invite_hash = value.tables.clubs[0].invite_hash; },
     value => { value.tables.records[0].club_id = id(99); }, value => { value.tables.cheers[0].record_id = id(99); },
     value => { value.tables.auth_registrations[0].legacy_hash = '8'.repeat(64); },
-    value => { value.tables.records[0].forehand = null; }, value => { value.tables.records[0].training_projects = '["backhand","backhand"]'; },
+    value => { value.tables.records[0].forehand = 11; }, value => { value.tables.records[0].training_projects = '["backhand","backhand"]'; },
     value => { value.checksum = '9'.repeat(64); }, value => { value.avatars = []; },
     value => { value.avatars[0].sha256 = '9'.repeat(64); }, value => { value.avatars[0].dataBase64 += '!'; },
     value => { value.avatars[0].contentType = 'image/jpeg'; }, value => { value.avatars.push({ ...value.avatars[0] }); },
-    value => { value.avatars[0].key = '../outside'; }, value => { value.tables.records[0].note = '\ud800'; }
+    value => { value.avatars[0].key = '../outside'; }, value => { value.tables.records[0].note = '\ud800'; },
+    value => { value.schemaVersion = 4; }, value => { delete value.tables.account_credentials; },
+    value => { value.tables.account_credentials[0].password_salt = '1'.repeat(31); },
+    value => { value.tables.account_credentials[0].email = 'UPPER@example.com'; },
+    value => { value.tables.account_credentials[0].account_id = id(999); },
+    value => { value.tables.account_credentials.push({ ...value.tables.account_credentials[0] }); },
+    value => { value.tables.monthly_ratings[0].month = '2026-13'; },
+    value => { value.tables.monthly_ratings[0].forehand = -1; },
+    value => { value.tables.monthly_ratings.push({ ...value.tables.monthly_ratings[0] }); },
+    value => { value.tables.record_photos[0].byte_size++; },
+    value => { value.tables.record_photos[0].content_type = 'image/jpeg'; },
+    value => { value.tables.record_photos[0].record_id = id(999); },
+    value => { value.avatars = value.avatars.filter(media => media.key !== value.tables.record_photos[0].object_key); },
+    value => { value.tables.members[0].removed_at = ''; },
+    value => { value.tables.members[0].public_share_hash = 'x'.repeat(64); },
+    value => { value.tables.club_invites[0].expires_at = -1; },
+    value => { value.tables.audit_events[0].actor_member_id = id(999); },
+    value => { value.tables.audit_events[0].details = '[]'; }
   ];
   for (const mutate of invalid) {
     const snapshot = snapshotFixture(); mutate(snapshot);

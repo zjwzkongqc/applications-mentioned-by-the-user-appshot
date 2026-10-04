@@ -5,9 +5,9 @@ import path from 'node:path';
 import { validatePublicOrigin } from './http.mjs';
 
 const APP_ID = 'tennis-dazi-club-2026';
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 const PAGES_ORIGIN = 'https://zjwzkongqc.github.io';
-const TABLES = ['accounts', 'account_sessions', 'auth_failures', 'auth_registrations', 'clubs', 'club_invites', 'members', 'records', 'checkins', 'cheers', 'culture'];
+const TABLES = ['accounts', 'account_sessions', 'account_credentials', 'auth_failures', 'auth_registrations', 'clubs', 'club_invites', 'members', 'records', 'checkins', 'cheers', 'culture', 'monthly_ratings', 'record_photos', 'audit_events'];
 const HEX_TOKEN = /^[a-f0-9]{64}$/;
 const CLUB_ID = /^[a-f0-9-]{36}$/;
 const PROOF_ID = /^[A-Za-z0-9_-]{1,80}$/;

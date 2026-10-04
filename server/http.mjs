@@ -124,7 +124,8 @@ export function createAppServer({ worker, env, publicOrigin, trustedProxyHops = 
       }
       const headers = requestHeaders(request, clientAddress(request, trustedProxyHops));
       const hasBody = !['GET', 'HEAD'].includes(method);
-      const body = hasBody ? await readBody(request, url.pathname === '/api/avatar' && method === 'POST' ? AVATAR_LIMIT : JSON_LIMIT) : undefined;
+      const imageUpload = method === 'POST' && (url.pathname === '/api/avatar' || /^\/api\/records\/[^/]+\/photos$/.test(url.pathname));
+      const body = hasBody ? await readBody(request, imageUpload ? AVATAR_LIMIT : JSON_LIMIT) : undefined;
       if (hasBody) headers.set('Content-Length', String(body.length));
       const incoming = new Request(url, { method, headers, body });
       const migrationPath = ['/api/migration', '/api/migration/validate'].includes(url.pathname);

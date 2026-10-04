@@ -21,7 +21,7 @@ async function privateWrite(filename, contents) {
 }
 async function migrations() {
   const names = (await readdir(MIGRATIONS_DIR)).filter(name => /^\d{4}_[\w-]+\.sql$/.test(name)).sort();
-  if (names.length !== 5 || names.some((name, index) => Number(name.slice(0, 4)) !== index)) refuse('The importer requires the unchanged schema 0–4 migrations.');
+  if (names.length !== SCHEMA_VERSION + 1 || names.some((name, index) => Number(name.slice(0, 4)) !== index)) refuse('The importer requires all unchanged application schema migrations.');
   return new Map(await Promise.all(names.map(async name => [name, sha256(await readFile(path.join(MIGRATIONS_DIR, name)))])));
 }
 async function existingInfo(filename) {

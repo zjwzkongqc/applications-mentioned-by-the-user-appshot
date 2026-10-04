@@ -10,6 +10,7 @@ import { createDatabase, createBucket } from '../server/storage.mjs';
 import { createAppServer } from '../server/http.mjs';
 import { createMigrationService } from '../server/migration.mjs';
 import { startBackend } from '../server/main.mjs';
+import { TABLE_NAMES } from '../scripts/backup-format.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const MIGRATIONS = join(ROOT, 'drizzle');
@@ -18,7 +19,8 @@ const PAGES = 'https://zjwzkongqc.github.io';
 const MIGRATION_ID = 'a'.repeat(64);
 const FROM_ORIGIN = 'https://tennis-source.test';
 const PAGE_BASE = PAGES + '/applications-mentioned-by-the-user-appshot/';
-const DATA_TABLES = ['accounts', 'account_sessions', 'auth_failures', 'auth_registrations', 'clubs', 'club_invites', 'members', 'records', 'checkins', 'cheers', 'culture'];
+const DATA_TABLES = TABLE_NAMES;
+const fixtureDatabases = new Map();
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScLbtAAAAABJRU5ErkJggg==', 'base64');
 const nonce = () => Buffer.from(crypto.getRandomValues(new Uint8Array(32))).toString('hex');
 let compiledWorker;
@@ -36,29 +38,40 @@ async function httpFixture(t, trustedProxyHops = 0, prepareMigration) {
   const migration = prepareMigration ? await prepareMigration({ directory, DB, env }) : undefined;
   const server = createAppServer({ worker: compiledWorker, env, publicOrigin: PUBLIC_ORIGIN, trustedProxyHops, migration });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  fixtureDatabases.set(url, DB);
   t.after(async () => {
     server.closeAllConnections?.();
     await new Promise(resolve => server.close(resolve));
     DB.close();
+    fixtureDatabases.delete(url);
     rmSync(directory, { recursive: true, force: true });
   });
-  return { url: `http://127.0.0.1:${server.address().port}`, DB, directory };
+  return { url, DB, directory };
 }
 
-function api(url, fetchRequest = fetch) {
-  return (path, { method = 'GET', invite, token, origin = PAGES, body, rawBody, headers: extras = {}, duplex } = {}) => {
+function api(url, fetchRequest = fetch, database) {
+  const call = (path, { method = 'GET', invite, token, origin = PAGES, body, rawBody, headers: extras = {}, duplex } = {}) => {
     const headers = { Origin: origin, ...extras };
     if (invite) headers.Authorization = `Bearer ${invite}`;
     if (token) headers['X-Tennis-Session'] = token;
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     return fetchRequest(url + path, { method, headers, body: body === undefined ? rawBody : JSON.stringify(body), ...(duplex ? { duplex } : {}) });
   };
+  call.database = database || fixtureDatabases.get(url);
+  return call;
 }
 
 async function newClub(call) {
-  const response = await call('/api/clubs', { method: 'POST', body: { name: '自主部署成长群', nickname: 'Chris', slogan: '每周一起挥拍' } });
-  assert.equal(response.status, 201);
-  const { invite, sessionToken: token } = await response.json();
+  // These fixtures are pre-upgrade identities. Schema 5 admits new visitors
+  // through signup, while migration must still preserve historical members.
+  const invite = nonce(), token = nonce(), clubId = crypto.randomUUID(), memberId = crypto.randomUUID(), time = new Date().toISOString();
+  const hash = async value => Buffer.from(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))).toString('hex');
+  assert.ok(call.database, 'Historical identity fixture requires its isolated database.');
+  await call.database.batch([
+    call.database.prepare('INSERT INTO clubs(id,invite_hash,name,slogan,owner_id,created_at) VALUES(?,?,?,?,?,?)').bind(clubId, await hash(invite), '自主部署成长群', '每周一起挥拍', memberId, time),
+    call.database.prepare('INSERT INTO members(id,club_id,session_hash,nickname,avatar_key,bio,created_at,account_id) VALUES(?,?,?,?,NULL,?,?,NULL)').bind(memberId, clubId, await hash(token), 'Chris', '', time)
+  ]);
   const board = await (await call('/api/board', { invite, token })).json();
   return { invite, token, clubId: board.club.id, memberId: board.me, registrationNonce: nonce() };
 }
@@ -142,7 +155,7 @@ test('HTTP wrapping preserves two cookies, canonical origin, and authenticated a
   assert.equal(avatar.headers.get('Access-Control-Allow-Origin'), PAGES);
   assert.match(avatar.headers.get('Vary'), /Origin/);
   assert.deepEqual(Buffer.from(await avatar.arrayBuffer()), PNG);
-  const missing = await call(`/api/avatar/${crypto.randomUUID()}`, { invite: club.invite });
+  const missing = await call(`/api/avatar/${crypto.randomUUID()}`, { invite: club.invite, token: accountToken });
   assert.equal(missing.status, 404);
   assert.equal(missing.headers.get('Access-Control-Allow-Origin'), PAGES);
   const denied = await call('/api/clubs', {
@@ -251,9 +264,11 @@ test('a real server process restart retains recovery identity, training, and ava
   let running;
   t.after(async () => { await stopProcess(running?.child); rmSync(directory, { recursive: true, force: true }); });
   running = await startProcess(directory);
-  let call = api(running.url);
+  const seedDatabase = createDatabase({ filename: join(directory, 'tennis.sqlite'), migrationsDir: MIGRATIONS });
+  let call = api(running.url, fetch, seedDatabase);
   assert.equal((await call('/healthz')).status, 200);
   const club = await newClub(call);
+  seedDatabase.close();
   const registered = await call('/api/auth/register', { method: 'POST', ...club, body: { registrationNonce: club.registrationNonce } });
   assert.equal(registered.status, 200);
   const saved = await registered.json();
@@ -290,7 +305,7 @@ async function migrationReceipt(DB, overrides = {}) {
   const tableCounts = {};
   for (const table of DATA_TABLES) tableCounts[table] = (await DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first()).n;
   return {
-    formatVersion: 1, appId: 'tennis-dazi-club-2026', schemaVersion: 4,
+    formatVersion: 1, appId: 'tennis-dazi-club-2026', schemaVersion: 5,
     migrationId: MIGRATION_ID, fromApiOrigin: FROM_ORIGIN, toApiOrigin: PUBLIC_ORIGIN, pageBaseUrl: PAGE_BASE,
     credentialsPreserved: true, sourceSnapshotSha256: 'a'.repeat(64), importedAt: new Date().toISOString(),
     tableCounts, avatarCount: 0, ...overrides
@@ -309,7 +324,7 @@ async function readyMigrationFixture(t) {
   let identities;
   const fixture = await httpFixture(t, 0, async context => {
     const { env, DB, directory } = context;
-    const call = api(PUBLIC_ORIGIN, (url, options) => compiledWorker.fetch(new Request(url, options), env));
+    const call = api(PUBLIC_ORIGIN, (url, options) => compiledWorker.fetch(new Request(url, options), env), DB);
     const bound = await newClub(call);
     const registration = await call('/api/auth/register', { method: 'POST', ...bound, body: { registrationNonce: bound.registrationNonce } });
     assert.equal(registration.status, 200);
