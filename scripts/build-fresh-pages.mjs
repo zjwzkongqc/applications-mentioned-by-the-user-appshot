@@ -11,14 +11,18 @@ export const FRESH_PREFIX='/functions/v1/tennis-fresh';
 export async function buildFreshPages(){
  const output=path.join(root,'dist/pages/fresh');
  await buildPages({output,env:{TENNIS_API_BASE_URL:FRESH_ORIGIN,TENNIS_API_PATH_PREFIX:'/functions/v1/tennis-api'}});
- const config={apiBaseUrl:FRESH_ORIGIN,apiPathPrefix:FRESH_PREFIX,pageBaseUrl:FRESH_PAGE,sameOriginOnly:true,freshStart:true};
+ const config={apiBaseUrl:FRESH_ORIGIN,apiPathPrefix:FRESH_PREFIX,pageBaseUrl:FRESH_PAGE,sameOriginOnly:true,freshStart:true,functionRegion:'ap-southeast-1'};
  await fs.writeFile(path.join(output,'config.js'),'window.TENNIS_CONFIG=Object.freeze('+JSON.stringify(config)+');\n');
  let app=await fs.readFile(path.join(output,'app.js'),'utf8');
- const guard="if(!['','/functions/v1/tennis-api'].includes(apiPathPrefix))";
- assert.equal(app.split(guard).length,2,'Review the frontend prefix guard before adapting it.');
- app=app.replace(guard,"if(apiPathPrefix!=='/functions/v1/tennis-fresh')");
- // A separate appBase already isolates persistent account and draft keys. Keep
- // migration disabled and never copy a credential from the original namespace.
+ function replaceOnce(source,replacement){assert.equal(app.split(source).length,2,'Review the fresh frontend adaptation: '+source);app=app.replace(source,replacement);}
+ replaceOnce("if(!['','/functions/v1/tennis-api'].includes(apiPathPrefix))","if(apiPathPrefix!=='/functions/v1/tennis-fresh')");
+ // The shared API performs multiple SQL round trips. Invoke it beside the
+ // Singapore database rather than paying a cross-continent hop for each query.
+ // The documented query parameter also routes browser CORS preflight correctly.
+ // https://supabase.com/docs/guides/functions/regional-invocation
+ replaceOnce('url.pathname=apiPathPrefix+url.pathname;return url;',"url.pathname=apiPathPrefix+url.pathname;url.searchParams.set('forceFunctionRegion','ap-southeast-1');return url;");
+ replaceOnce("return fetch(url,{...fetchOptions,headers,credentials:remoteApi?'omit':'same-origin',redirect:'error'});","const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),30000);try{return await fetch(url,{...fetchOptions,signal:fetchOptions.signal||controller.signal,headers,credentials:remoteApi?'omit':'same-origin',redirect:'error'});}finally{clearTimeout(timer);}");
+ // Never copy credentials from the original website namespace.
  assert(!Object.hasOwn(config,'credentialMigration'));
  await fs.writeFile(path.join(output,'app.js'),app);
  let css=await fs.readFile(path.join(output,'style.css'),'utf8');
@@ -31,7 +35,7 @@ export async function buildFreshPages(){
   html=html.replace(new RegExp('(\\./'+file.replace('.','\\.')+')(?:\\?v=[a-f0-9]+)?','g'),'$1?v='+version);
  }
  await fs.writeFile(path.join(output,'index.html'),html);
- await fs.writeFile(path.join(output,'release.json'),JSON.stringify({release:'fresh-v1',page:FRESH_PAGE,api:FRESH_ORIGIN+FRESH_PREFIX,mode:'new-empty-app',legacyDataImported:false}));
+ await fs.writeFile(path.join(output,'release.json'),JSON.stringify({release:'fresh-v1',page:FRESH_PAGE,api:FRESH_ORIGIN+FRESH_PREFIX,mode:'new-empty-app',legacyDataImported:false,functionRegion:'ap-southeast-1'}));
  console.log('Built independent fresh app at '+FRESH_PAGE);
  return output;
 }
