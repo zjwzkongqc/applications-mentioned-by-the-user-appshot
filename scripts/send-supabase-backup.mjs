@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { createPrivateKey, randomBytes, sign } from 'node:crypto';
 import { migrationConfig } from '../supabase/functions/tennis-api/migration-config.mjs';
 import { OWNER_IMPORT_PATH, importSignatureMessage } from '../supabase/functions/tennis-api/owner-import.mjs';
-import { sha256, validateSnapshot, APP_ID, FORMAT_VERSION, SCHEMA_VERSION } from '../supabase/functions/tennis-api/import.mjs';
+import { sha256, validateSnapshot, APP_ID, FORMAT_VERSION, SCHEMA_VERSION, TABLE_NAMES } from '../supabase/functions/tennis-api/import.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const LIMIT = 32 * 1024 * 1024;
@@ -21,9 +21,10 @@ async function privateFile(filename, limit) {
     return bytes;
   } finally { await handle.close(); }
 }
-export async function sendSupabaseBackup({ input, signingKey, origin, fetch: request = fetch }) {
+export async function sendSupabaseBackup({ input, signingKey, origin, fetch: request = fetch, importPath = OWNER_IMPORT_PATH, validatePublicOrigin }) {
   const url = new URL(origin);
-  if (url.origin !== origin || url.protocol !== 'https:' || !/^[a-z0-9]{20}\.supabase\.co$/.test(url.hostname)) throw new Error('Specify the approved Supabase project HTTPS origin.');
+  const approvedOrigin = validatePublicOrigin ? validatePublicOrigin(origin) === origin : /^[a-z0-9]{20}\.supabase\.co$/.test(url.hostname);
+  if (url.origin !== origin || url.protocol !== 'https:' || !approvedOrigin || !/^\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/.test(importPath) || importPath.length > 200) throw new Error('Specify the approved project HTTPS origin and import path.');
   const bytes = await privateFile(input, LIMIT);
   const snapshotJson = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
   await validateSnapshot(JSON.parse(snapshotJson));
@@ -31,11 +32,11 @@ export async function sendSupabaseBackup({ input, signingKey, origin, fetch: req
   const key = createPrivateKey({ key: keyBytes, format: 'der', type: 'pkcs8' });
   if (key.asymmetricKeyType !== 'ec' || key.asymmetricKeyDetails?.namedCurve !== 'prime256v1') throw new Error('The private migration signer is invalid.');
   const digest = await sha256(bytes), timestamp = String(Date.now()), nonce = randomBytes(32).toString('hex');
-  const message = importSignatureMessage({ publicOrigin: origin, ...migrationConfig, digest, timestamp, nonce });
+  const message = importSignatureMessage({ publicOrigin: origin, ...migrationConfig, digest, timestamp, nonce, importPath });
   const signature = sign('sha256', Buffer.from(message), { key, dsaEncoding: 'ieee-p1363' }).toString('base64url');
   let response;
   try {
-    response = await request(origin + OWNER_IMPORT_PATH, { method: 'POST', redirect: 'error',
+    response = await request(origin + importPath, { method: 'POST', redirect: 'error',
       headers: { 'Content-Type': 'application/json', 'X-Tennis-Import-SHA256': digest,
         'X-Tennis-Import-Time': timestamp, 'X-Tennis-Import-Nonce': nonce, 'X-Tennis-Import-Signature': signature }, body: bytes,
       signal: AbortSignal.timeout(120000) });
@@ -45,7 +46,9 @@ export async function sendSupabaseBackup({ input, signingKey, origin, fetch: req
   try { result = await response.json(); } catch { throw new Error('Destination returned an invalid import receipt.'); }
   const receipt = result?.receipt;
   if (result.imported !== true || receipt?.appId !== APP_ID || receipt.schemaVersion !== SCHEMA_VERSION || receipt.formatVersion !== FORMAT_VERSION || receipt.credentialsPreserved !== true || receipt.toApiOrigin !== origin || receipt.sourceSnapshotSha256 !== digest ||
-      Object.entries(migrationConfig).some(([name, value]) => receipt[name] !== value)) throw new Error('Destination receipt does not match the signed migration.');
+      Object.entries(migrationConfig).some(([name, value]) => receipt[name] !== value) ||
+      typeof receipt.importedAt !== 'string' || !Number.isFinite(Date.parse(receipt.importedAt)) || !Number.isSafeInteger(receipt.avatarCount) || receipt.avatarCount < 0 ||
+      !receipt.tableCounts || Object.keys(receipt.tableCounts).length !== TABLE_NAMES.length || TABLE_NAMES.some(name => !Number.isSafeInteger(receipt.tableCounts[name]) || receipt.tableCounts[name] < 0)) throw new Error('Destination receipt does not match the signed migration.');
   return receipt;
 }
 async function main() {

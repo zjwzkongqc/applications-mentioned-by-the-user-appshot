@@ -33,28 +33,30 @@ async function boundedBody(request, limit) {
   return bytes;
 }
 
-function finalized(response) {
+function finalized(response, apiPrefix = PREFIX) {
   const headers = new Headers(response.headers);
   const cookies = typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : [];
   if (cookies.length) {
     headers.delete('Set-Cookie');
-    for (const cookie of cookies) headers.append('Set-Cookie', cookie.replace('; Path=/api/auth/register;', '; Path=' + PREFIX + '/api/auth/register;'));
+    for (const cookie of cookies) headers.append('Set-Cookie', cookie.replace('; Path=/api/auth/register;', '; Path=' + apiPrefix + '/api/auth/register;'));
   }
   headers.set('X-Content-Type-Options', 'nosniff'); headers.set('Referrer-Policy', 'no-referrer');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
-export function createEdgeHandler({ worker, DB, BUCKET, publicOrigin, maintenanceMode = false, migrationId, migrationFromOrigin, migrationPageBaseUrl }) {
-  const origin = supabaseOrigin(publicOrigin);
+export function createEdgeHandler({ worker, DB, BUCKET, publicOrigin, maintenanceMode = false, migrationId, migrationFromOrigin, migrationPageBaseUrl, apiPrefix = PREFIX, validatePublicOrigin = supabaseOrigin }) {
+  const origin = validatePublicOrigin(publicOrigin);
+  if (typeof apiPrefix !== 'string' || !/^(?:\/[a-zA-Z0-9_-]+)*$/.test(apiPrefix) || apiPrefix.length > 200) throw new Error('The API path configuration is invalid.');
+  const finalize = response => finalized(response, apiPrefix);
   if (!maintenanceMode && (!worker?.fetch || !DB?.prepare || !BUCKET)) throw new Error('Server-side application dependencies are unavailable.');
   const migration = maintenanceMode ? null : createEdgeMigration({ DB, publicOrigin: origin, migrationId, migrationFromOrigin, migrationPageBaseUrl });
   return async request => {
     try {
       const source = new URL(request.url);
-      if (source.pathname !== PREFIX && !source.pathname.startsWith(PREFIX + '/')) return json(request, { error: '页面不存在。' }, 404);
-      const pathname = source.pathname.slice(PREFIX.length) || '/';
+      if (apiPrefix && source.pathname !== apiPrefix && !source.pathname.startsWith(apiPrefix + '/')) return json(request, { error: '页面不存在。' }, 404);
+      const pathname = source.pathname.slice(apiPrefix.length) || '/';
       const canonical = new URL(origin + pathname + source.search);
-      if (pathname === '/' && request.method === 'GET') return finalized(new Response(null, { status: 302, headers: { Location: PAGE_BASE, 'Cache-Control': 'no-store' } }));
+      if (pathname === '/' && request.method === 'GET') return finalize(new Response(null, { status: 302, headers: { Location: PAGE_BASE, 'Cache-Control': 'no-store' } }));
       if (pathname !== '/healthz' && !pathname.startsWith('/api/')) return json(request, { error: '页面不存在。' }, 404);
       if (maintenanceMode) return pathname === '/healthz' && ['GET', 'HEAD'].includes(request.method) ? json(request, { ok: true, maintenance: true }) : json(request, { ready: false, maintenance: true, error: '小本本正在迁移，请稍后再来。' }, 503);
       const suppliedOrigin = request.headers.get('Origin');
@@ -67,7 +69,7 @@ export function createEdgeHandler({ worker, DB, BUCKET, publicOrigin, maintenanc
       // This deployment is a receiver for an existing application. A missing
       // deployment secret must never turn an empty project into a fresh app.
       if (!state.ready) return json(request, { ready: false, error: '迁移数据尚未就绪，请稍后再试。' }, 503);
-      if (migrationPath && request.method === 'OPTIONS') return suppliedOrigin === PAGES_ORIGIN ? finalized(new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': PAGES_ORIGIN, 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600', Vary: 'Origin' } })) : json(request, { error: '请在原页面完成操作。' }, 403);
+      if (migrationPath && request.method === 'OPTIONS') return suppliedOrigin === PAGES_ORIGIN ? finalize(new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': PAGES_ORIGIN, 'Access-Control-Allow-Methods': 'GET, POST', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '600', Vary: 'Origin' } })) : json(request, { error: '请在原页面完成操作。' }, 403);
       if (pathname === '/api/migration' && request.method === 'GET') return json(request, state.manifest);
       const encoding = request.headers.get('Content-Encoding');
       if (encoding && encoding.toLowerCase() !== 'identity') return json(request, { error: '请直接提交原始内容。' }, 415);
@@ -82,11 +84,11 @@ export function createEdgeHandler({ worker, DB, BUCKET, publicOrigin, maintenanc
       }
       const headers = new Headers(request.headers);
       for (const name of HOP_HEADERS) headers.delete(name);
-      // Supabase's runtime is behind a gateway. A client-supplied CF/XFF value
+      // The serverless runtime is behind a gateway. A client-supplied CF/XFF value
       // cannot prove a source address, so use one conservative shared budget.
       headers.set('CF-Connecting-IP', 'tennis-supabase-edge-shared');
       if (hasBody) headers.set('Content-Length', String(body.byteLength));
-      return finalized(await worker.fetch(new Request(canonical, { method: request.method, headers, body }), { DB, BUCKET }));
+      return finalize(await worker.fetch(new Request(canonical, { method: request.method, headers, body }), { DB, BUCKET }));
     } catch (error) {
       const status = [400, 413, 415].includes(error?.status) ? error.status : 503;
       return json(request, { error: status === 413 ? '提交内容过大，请缩短文字或选择小于 2MB 的图片。' : status === 400 ? '请求格式不正确，请重试。' : '小本本暂时连不上，请稍后重试。' }, status);

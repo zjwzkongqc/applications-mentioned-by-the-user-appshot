@@ -6,8 +6,8 @@ const HASH = /^[a-f0-9]{64}$/;
 const FORBIDDEN = ['Origin', 'Cookie', 'Authorization', 'X-Tennis-Session'];
 const encoder = new TextEncoder();
 
-export function importSignatureMessage({ publicOrigin, migrationId, fromApiOrigin, pageBaseUrl, digest, timestamp, nonce }) {
-  return ['tennis-owner-import-v1', 'POST', OWNER_IMPORT_PATH, publicOrigin,
+export function importSignatureMessage({ publicOrigin, migrationId, fromApiOrigin, pageBaseUrl, digest, timestamp, nonce, importPath = OWNER_IMPORT_PATH }) {
+  return ['tennis-owner-import-v1', 'POST', importPath, publicOrigin,
     migrationId, fromApiOrigin, pageBaseUrl, digest, timestamp, nonce].join('\n');
 }
 
@@ -37,22 +37,24 @@ async function readBody(request) {
   return bytes;
 }
 
-export function createOwnerImportHandler({ publicOrigin, migrationId, fromApiOrigin, pageBaseUrl, publicKey, importSnapshot, readReceipt, now = Date.now }) {
+export function createOwnerImportHandler({ publicOrigin, migrationId, fromApiOrigin, pageBaseUrl, publicKey, importSnapshot, readReceipt, now = Date.now, importPath = OWNER_IMPORT_PATH, validatePublicOrigin }) {
   const origin = new URL(publicOrigin), from = new URL(fromApiOrigin), page = new URL(pageBaseUrl);
-  if (origin.protocol !== 'https:' || origin.origin !== publicOrigin || !/^[a-z0-9]{20}\.supabase\.co$/.test(origin.hostname) ||
+  const approvedOrigin = validatePublicOrigin ? validatePublicOrigin(publicOrigin) === publicOrigin : /^[a-z0-9]{20}\.supabase\.co$/.test(origin.hostname);
+  if (origin.protocol !== 'https:' || origin.origin !== publicOrigin || !approvedOrigin || !/^\/(?:[a-zA-Z0-9_-]+\/)*[a-zA-Z0-9_-]+$/.test(importPath) || importPath.length > 200 ||
       from.protocol !== 'https:' || from.origin !== fromApiOrigin || fromApiOrigin !== 'https://tennis-dazi-club-2026.divine-seal-5110.chatgpt.site' ||
       pageBaseUrl !== 'https://zjwzkongqc.github.io/applications-mentioned-by-the-user-appshot/' || page.href !== pageBaseUrl || !HASH.test(migrationId) ||
       !publicKey || publicKey.kty !== 'EC' || publicKey.crv !== 'P-256' || typeof importSnapshot !== 'function' || typeof readReceipt !== 'function') throw new Error('Private import configuration is invalid.');
   const verificationKey = crypto.subtle.importKey('jwk', publicKey, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
   // A matching permanent receipt makes a lost success response safe to retry.
-  // The importer serializes storage, SQL, and cleanup across runtime instances.
+  // The importer verifies immutable staged media and commits rows plus the
+  // receipt atomically, without deleting uncertain or concurrent staging.
   const matchesReceipt = (receipt, digest) => receipt && receipt.formatVersion === FORMAT_VERSION && receipt.appId === APP_ID && receipt.schemaVersion === SCHEMA_VERSION && receipt.credentialsPreserved === true &&
     receipt.migrationId === migrationId && receipt.fromApiOrigin === fromApiOrigin && receipt.toApiOrigin === publicOrigin && receipt.pageBaseUrl === pageBaseUrl && receipt.sourceSnapshotSha256 === digest &&
     typeof receipt.importedAt === 'string' && Number.isFinite(Date.parse(receipt.importedAt)) && Number.isSafeInteger(receipt.avatarCount) && receipt.avatarCount >= 0 && receipt.tableCounts &&
     TABLE_NAMES.every(name => Number.isSafeInteger(receipt.tableCounts[name]) && receipt.tableCounts[name] >= 0) && Object.keys(receipt.tableCounts).length === TABLE_NAMES.length;
   return async request => {
     const url = new URL(request.url);
-    if (url.pathname !== OWNER_IMPORT_PATH) return null;
+    if (url.pathname !== importPath) return null;
     if (url.search || request.method !== 'POST' || FORBIDDEN.some(name => request.headers.has(name)) || request.headers.get('Content-Type') !== 'application/json' ||
         (request.headers.has('Content-Encoding') && request.headers.get('Content-Encoding').toLowerCase() !== 'identity')) return hidden();
     const digest = request.headers.get('X-Tennis-Import-SHA256'), timestamp = request.headers.get('X-Tennis-Import-Time'), nonce = request.headers.get('X-Tennis-Import-Nonce'), signature = request.headers.get('X-Tennis-Import-Signature');
@@ -61,7 +63,7 @@ export function createOwnerImportHandler({ publicOrigin, migrationId, fromApiOri
     try {
       const bytes = Uint8Array.from(atob(signature.replaceAll('-', '+').replaceAll('_', '/') + '=='), char => char.charCodeAt(0));
       authenticated = bytes.length === 64 && await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, await verificationKey, bytes,
-        encoder.encode(importSignatureMessage({ publicOrigin, migrationId, fromApiOrigin, pageBaseUrl, digest, timestamp, nonce })));
+        encoder.encode(importSignatureMessage({ publicOrigin, migrationId, fromApiOrigin, pageBaseUrl, digest, timestamp, nonce, importPath })));
     } catch { /* Invalid requests disclose no deployment state. */ }
     if (!authenticated) return hidden();
     let bodyVerified = false;

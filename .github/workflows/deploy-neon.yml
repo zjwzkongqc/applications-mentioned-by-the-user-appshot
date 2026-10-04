@@ -1,0 +1,45 @@
+name: Prepare free Neon tennis backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id:
+        description: Existing Neon Free project ID (or leave blank to use the GitHub integration variable)
+        required: false
+        type: string
+      branch_id:
+        description: Existing application branch ID (br-…)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tennis-neon-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Check and verify application
+        run: npm run check && npm test
+      - name: Build complete Node.js function
+        run: npm run build:neon
+      - name: Verify Free plan and prepare private backend
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          TENNIS_PROJECT_ID: ${{ inputs.project_id || vars.NEON_PROJECT_ID }}
+          TENNIS_BRANCH_ID: ${{ inputs.branch_id }}
+        run: node scripts/deploy-neon.mjs --project-id "$TENNIS_PROJECT_ID" --branch-id "$TENNIS_BRANCH_ID"

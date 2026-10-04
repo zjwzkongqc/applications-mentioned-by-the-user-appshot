@@ -13,4 +13,5 @@ private-migration/
 *.sqlite-*
 *.object
 /supabase/functions/tennis-api/worker.mjs
+/neon/functions/tennis-api/worker.mjs
 *.pk8
