@@ -1,5 +1,4 @@
-// API-only deployment of the existing tennis application. Every remote source
-// is pinned to a reviewed immutable Git commit, never a mutable branch.
+// API-only deployment. Remote sources are pinned to an immutable Git commit.
 import postgres from 'npm:postgres@3.4.7';
 import originalWorker from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/src/worker.js';
 import { createPostgresDatabase, postgresOptions } from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/supabase/functions/tennis-api/postgres.mjs';
@@ -8,6 +7,7 @@ import { createEdgeHandler } from 'https://raw.githubusercontent.com/zjwzkongqc/
 import { migrationConfig, ownerImportPublicKey } from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/supabase/functions/tennis-api/migration-config.mjs';
 import { createOwnerImportHandler } from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/supabase/functions/tennis-api/owner-import.mjs';
 import { importPrivateSnapshot, createImportBucket } from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/supabase/functions/tennis-api/import.mjs';
+import { canonicalRequest } from './canonical-request.mjs';
 
 const publicOrigin = supabaseOrigin(Deno.env.get('SUPABASE_URL'));
 const maintenanceMode = Deno.env.get('MAINTENANCE_MODE') === '1';
@@ -27,16 +27,12 @@ if (!maintenanceMode) {
   } catch { throw new Error('The platform database configuration is invalid.'); }
   BUCKET = createSupabaseBucket({ url: publicOrigin, serviceRoleKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') });
 }
-// GitHub Pages owns the static assets. Do not invoke the raw shared worker's
-// static routes, which require asset injection by the standalone build.
 const worker = {
   fetch(request, env) {
     if (!new URL(request.url).pathname.startsWith('/api/')) return new Response(null, { status: 404 });
     return originalWorker.fetch(request, env);
   }
 };
-// The existing handler fails closed until a valid schema-5 migration receipt
-// exists. Deploying this receiver cannot silently create a replacement group.
 const application = createEdgeHandler({ worker, DB, BUCKET, publicOrigin, maintenanceMode,
   migrationId: migrationConfig.migrationId,
   migrationFromOrigin: migrationConfig.fromApiOrigin,
@@ -48,4 +44,8 @@ const ownerImport = maintenanceMode ? null : createOwnerImportHandler({
   importSnapshot: (input) => importPrivateSnapshot({ ...input, db: databaseConnection,
     bucket: createImportBucket({ url: publicOrigin, serviceRoleKey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') }) })
 });
-Deno.serve(async request => (await ownerImport?.(request)) ?? application(request));
+Deno.serve(async request => {
+  const normalized = canonicalRequest(request, publicOrigin);
+  if (!normalized) return new Response(null, { status: 404, headers: { 'Cache-Control': 'no-store' } });
+  return (await ownerImport?.(normalized)) ?? application(normalized);
+});
