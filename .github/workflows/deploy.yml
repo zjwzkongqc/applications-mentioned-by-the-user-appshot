@@ -1,30 +1,29 @@
 name: Publish tennis club to GitHub Pages
-
 on:
   push:
     branches: [main]
   workflow_dispatch:
-
+    inputs:
+      full_fresh_acceptance:
+        description: Run disposable-account live acceptance (requires cleanup of exact fixture IDs)
+        type: boolean
+        default: false
 permissions:
   contents: read
   pages: write
   id-token: write
-
 concurrency:
   group: github-pages
   cancel-in-progress: false
-
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Check out source
-        uses: actions/checkout@v5
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: '24'
           cache: npm
@@ -41,7 +40,7 @@ jobs:
           TENNIS_MIGRATION_FROM_ORIGIN: ${{ vars.TENNIS_MIGRATION_FROM_ORIGIN }}
           TENNIS_MIGRATION_ID: ${{ vars.TENNIS_MIGRATION_ID }}
         run: npm run build:pages:ci
-      - name: Add separate new app without changing original output
+      - name: Add new child path without changing original output
         run: |
           sha256sum dist/pages/index.html dist/pages/config.js > /tmp/original-root.sha256
           node scripts/build-fresh-pages.mjs
@@ -55,7 +54,6 @@ jobs:
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist/pages
-
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -67,7 +65,6 @@ jobs:
       - name: Publish GitHub Pages application
         id: deployment
         uses: actions/deploy-pages@v4
-
   verify-published:
     needs: deploy
     runs-on: ubuntu-latest
@@ -87,7 +84,10 @@ jobs:
           npm ci
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Verify actual published Pages and live Supabase
+      - name: Read-only actual Pages and backend verification
+        run: node test/fresh-published-smoke.mjs
+      - name: Explicit one-time live login and saving acceptance
+        if: ${{ inputs.full_fresh_acceptance == true || contains(github.event.head_commit.message, '[fresh-acceptance]') }}
         env:
           LIVE_PAGES: '1'
         run: node test/fresh-live-browser.mjs
@@ -97,7 +97,9 @@ jobs:
         with:
           name: fresh-published-verification
           path: |
+            fresh-smoke-report.json
             fresh-live-report.json
             fresh-welcome.png
+            fresh-mobile-welcome.png
           if-no-files-found: ignore
           retention-days: 7
