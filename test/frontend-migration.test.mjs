@@ -5,9 +5,10 @@ import os from 'node:os';
 import path from 'node:path';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
-import { buildPages, getPagesConfig, validateApiOrigin, LEGACY_API_ORIGIN, PAGES_BASE_URL } from '../scripts/build-pages.mjs';
+import { buildPages, getPagesConfig, validateApiOrigin, LEGACY_API_ORIGIN, PAGES_BASE_URL, SUPABASE_API_PREFIX } from '../scripts/build-pages.mjs';
 
 const API = 'https://tennis-service.onrender.com';
+const SUPABASE_API = 'https://tennisfixtureabcdefg.supabase.co';
 const ID = '1'.repeat(64);
 const ACCOUNT = 'a'.repeat(64), MEMBER = 'b'.repeat(64), CLAIM = 'c'.repeat(64), PENDING = 'd'.repeat(64);
 const INVITE = 'e'.repeat(64), NONCE = 'f'.repeat(64);
@@ -18,6 +19,7 @@ const newMember = `tennis-club:member:${API}:${PAGES_BASE_URL}`;
 const newAccount = `tennis-club:account:${API}:${PAGES_BASE_URL}`;
 const env = { TENNIS_API_BASE_URL: API, TENNIS_MIGRATION_FROM_ORIGIN: LEGACY_API_ORIGIN, TENNIS_MIGRATION_ID: ID };
 const trustedConfig = getPagesConfig(env);
+const supabaseConfig = getPagesConfig({ ...env, TENNIS_API_BASE_URL: SUPABASE_API, TENNIS_API_PATH_PREFIX: SUPABASE_API_PREFIX });
 const manifest = { ...trustedConfig.credentialMigration, toApiOrigin: API, pageBaseUrl: PAGES_BASE_URL, credentialsPreserved: true };
 const fullSource = () => ({
   [oldAccount]: ACCOUNT,
@@ -32,6 +34,11 @@ const source = await fs.readFile(new URL('../src/app.js', import.meta.url), 'utf
 // Execute the actual browser bootstrap and transport, with an isolated storage
 // and network boundary. No duplicate implementation or live service is used.
 const bootstrap = source.slice(0, source.indexOf('const moods='));
+const actualFunction = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
+const browserFunctions = actualFunction('function esc(', '\nfunction hours(') +
+  actualFunction('async function loadAvatars(', '\nconst tabs=') +
+  actualFunction('function joinBanner(', '\nfunction badge(') +
+  actualFunction('function shareUrl(', '\nasync function openInvite(');
 
 function storage(entries = {}) {
   const values = { ...entries };
@@ -50,22 +57,23 @@ function response(body, url, options = {}) {
   return { ok: options.ok !== false, url, redirected: !!options.redirected, json: async () => structuredClone(body) };
 }
 
-function frontend({ config = trustedConfig, entries = fullSource(), handler, hash = '' } = {}) {
-  const localStorage = storage(entries), calls = [], location = { origin: new URL(PAGES_BASE_URL).origin, hash, assign() {}, replace() {} };
+function frontend({ config = trustedConfig, entries = fullSource(), handler, hash = '', sessionEntries = {} } = {}) {
+  const localStorage = storage(entries), calls = [], replacements = [], location = { origin: new URL(PAGES_BASE_URL).origin, hash, assign() {}, replace() {} };
+  const currentManifest = { ...config.credentialMigration, toApiOrigin: config.apiBaseUrl, pageBaseUrl: config.pageBaseUrl, credentialsPreserved: true };
   const context = vm.createContext({
-    window: { TENNIS_CONFIG: structuredClone(config) }, document: { querySelector: () => ({}) },
-    localStorage, sessionStorage: storage(), location, history: { replaceState() {} },
+    window: { TENNIS_CONFIG: structuredClone(config) }, document: { querySelector: () => ({}), querySelectorAll: () => [] },
+    localStorage, sessionStorage: storage(sessionEntries), location, history: { replaceState: (state, title, url) => replacements.push(url) },
     URL, URLSearchParams, Headers, AbortController, setTimeout, clearTimeout, crypto: webcrypto,
     fetch: async (input, options = {}) => {
       const url = String(input); calls.push({ url, ...options, headers: new Headers(options.headers) });
       if (handler) return handler(url, options, calls);
-      if (url.endsWith('/api/migration')) return response(manifest, url);
-      if (url.endsWith('/api/migration/validate')) return response({ ...manifest, acceptedProofIds: JSON.parse(options.body).proofs.map(proof => proof.proofId) }, url);
+      if (url.endsWith('/api/migration')) return response(currentManifest, url);
+      if (url.endsWith('/api/migration/validate')) return response({ ...currentManifest, acceptedProofIds: JSON.parse(options.body).proofs.map(proof => proof.proofId) }, url);
       return response({ account: null, clubs: [] }, url);
     }
   });
-  vm.runInContext(bootstrap + '\nglobalThis.frontend={ensureCredentialMigration,apiFetch,state,migrationKey,markMigrationSignedOut,forgetAccountSession,forgetLegacySessions,forgetDeviceSessions,beginPagesLink};', context);
-  return { ...context.frontend, localStorage, calls, context, location };
+  vm.runInContext(bootstrap + browserFunctions + '\nglobalThis.frontend={ensureCredentialMigration,apiFetch,apiUrl,state,migrationKey,markMigrationSignedOut,forgetAccountSession,forgetLegacySessions,forgetDeviceSessions,beginPagesLink,showPagesLink,joinBanner,shareUrl,loadAvatars,SERVICE_BASE};', context);
+  return { ...context.frontend, localStorage, calls, replacements, context, location };
 }
 
 test('Pages build keeps the current production origin until an explicit replacement is configured', async t => {
@@ -73,6 +81,7 @@ test('Pages build keeps the current production origin until an explicit replacem
   t.after(() => fs.rm(directory, { recursive: true, force: true }));
   const legacy = await buildPages({ output: path.join(directory, 'legacy'), env: {} });
   assert.equal(legacy.config.apiBaseUrl, LEGACY_API_ORIGIN);
+  assert.equal(legacy.config.apiPathPrefix, '');
   assert.equal(legacy.config.credentialMigration, undefined);
   const replacement = await buildPages({ output: path.join(directory, 'replacement'), env });
   const html = await fs.readFile(path.join(replacement.output, 'index.html'), 'utf8');
@@ -347,4 +356,123 @@ test('legacy identity bridge uses the configured API origin and keeps GitHub inv
   assert.equal(new URL(destination).origin, API);
   assert.equal(new URL(destination).hash.startsWith('#g=' + INVITE + '&connect=pages&state='), true);
   assert.ok(!destination.includes(LEGACY_API_ORIGIN));
+});
+
+test('Supabase prefix is a fixed separate setting; config and CSP keep a pure API origin', async t => {
+  for (const prefix of ['/', '/api', '/functions/v1/other', SUPABASE_API_PREFIX + '/', SUPABASE_API_PREFIX + '?token=x',
+    SUPABASE_API_PREFIX + '#token=x', 'https://other.supabase.co', '//other.supabase.co', null, 0]) {
+    assert.throws(() => getPagesConfig({ ...env, TENNIS_API_PATH_PREFIX: prefix }), /TENNIS_API_PATH_PREFIX/);
+    let networkCalls = 0;
+    assert.throws(() => frontend({ config: { ...trustedConfig, apiPathPrefix: prefix }, handler: () => { networkCalls++; } }), /账户服务路径配置无效/);
+    assert.equal(networkCalls, 0);
+  }
+  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'tennis-supabase-config-'));
+  t.after(() => fs.rm(directory, { recursive: true, force: true }));
+  const built = await buildPages({ output: directory, env: { ...env, TENNIS_API_BASE_URL: SUPABASE_API, TENNIS_API_PATH_PREFIX: SUPABASE_API_PREFIX } });
+  const html = await fs.readFile(path.join(directory, 'index.html'), 'utf8');
+  const configJs = await fs.readFile(path.join(directory, 'config.js'), 'utf8');
+  assert.equal(built.config.apiBaseUrl, SUPABASE_API);
+  assert.equal(built.config.apiPathPrefix, SUPABASE_API_PREFIX);
+  assert.ok(html.includes(`connect-src 'self' ${SUPABASE_API};`));
+  assert.ok(!html.includes(SUPABASE_API + SUPABASE_API_PREFIX));
+  assert.ok(configJs.includes('"apiPathPrefix": "/functions/v1/tennis-api"'));
+  assert.equal(built.config.pageBaseUrl, PAGES_BASE_URL);
+});
+
+test('prefixed migration, auth, records, growth and avatar transport retain paths, proof scope and GitHub sharing', async () => {
+  const tuple = { ...supabaseConfig.credentialMigration, toApiOrigin: SUPABASE_API, pageBaseUrl: PAGES_BASE_URL, credentialsPreserved: true };
+  const f = frontend({ config: supabaseConfig, hash: '#g=' + INVITE, handler: (url, options) => {
+    if (url.endsWith('/api/migration')) return response(tuple, url);
+    if (url.endsWith('/api/migration/validate')) return response({ ...tuple, acceptedProofIds: JSON.parse(options.body).proofs.map(p => p.proofId) }, url);
+    if (url.endsWith('/api/avatar/' + CLUB)) return { ...response({}, url), blob: async () => new Blob(['fixture avatar'], { type: 'image/jpeg' }) };
+    return response({}, url);
+  } });
+  await f.apiFetch('/api/auth/me');
+  assert.equal(f.calls[0].url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/migration');
+  assert.equal(f.calls[0].headers.get('X-Tennis-Session'), null);
+  assert.equal(f.calls[0].headers.get('Authorization'), null);
+  assert.equal(f.calls[0].body, undefined);
+  assert.equal(f.calls[1].url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/migration/validate');
+  assert.equal(f.calls[1].headers.get('X-Tennis-Session'), null);
+  assert.equal(f.calls[1].headers.get('Authorization'), null);
+  assert.equal(f.calls[1].credentials, 'omit');
+  assert.equal(f.calls[1].redirect, 'error');
+  assert.equal(f.calls[2].headers.get('X-Tennis-Session'), ACCOUNT);
+  assert.equal(f.calls[2].headers.get('Authorization'), null);
+  const targetMember = `tennis-club:member:${SUPABASE_API}:${PAGES_BASE_URL}`;
+  const targetAccount = `tennis-club:account:${SUPABASE_API}:${PAGES_BASE_URL}`;
+  assert.equal(f.localStorage.getItem(targetAccount), ACCOUNT);
+  assert.equal(JSON.parse(f.localStorage.getItem(targetMember + ':registration:' + OTHER_CLUB)).nonce, NONCE);
+  assert.equal(f.localStorage.getItem(oldAccount), ACCOUNT);
+  assert.ok(Object.keys(f.localStorage).every(key => !key.includes(SUPABASE_API + SUPABASE_API_PREFIX)));
+
+  const routes = ['/api/auth/me', '/api/auth/login', '/api/auth/logout', '/api/auth/recovery', `/api/auth/bind?club=${CLUB}`,
+    '/api/clubs', '/api/board', '/api/profile', '/api/avatar', '/api/records', `/api/records/${CLUB}`, '/api/checkins',
+    '/api/growth?month=2026-10&page=2', '/api/training-plan', '/api/cheers', '/api/culture', '/api/club', '/api/invite'];
+  for (const route of routes) {
+    await f.apiFetch(route);
+    const call = f.calls.at(-1);
+    assert.equal(call.url, SUPABASE_API + SUPABASE_API_PREFIX + route);
+    assert.equal(call.headers.get('X-Tennis-Session'), ACCOUNT);
+    const pathname = new URL(route, SUPABASE_API).pathname;
+    assert.equal(call.headers.get('Authorization'), /^\/api\/auth\/(me|login|logout|recovery|bind)$/.test(pathname) ? null : 'Bearer ' + INVITE);
+  }
+  await f.apiFetch(`/api/auth/register?club=${OTHER_CLUB}`, { method: 'POST', legacySession: PENDING, body: JSON.stringify({ registrationNonce: NONCE }) });
+  assert.equal(f.calls.at(-1).headers.get('X-Tennis-Session'), PENDING);
+  assert.equal(f.calls.at(-1).url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/auth/register?club=' + OTHER_CLUB);
+  f.state.board = { club: { id: CLUB }, me: null, members: [{ id: CLUB, nickname: '原来的我', hasAvatar: true, avatarVersion: 17 }] };
+  await f.loadAvatars();
+  assert.equal(f.calls.at(-1).url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/avatar/' + CLUB);
+  assert.equal(f.state.avatars.get(CLUB)?.version, 17);
+  URL.revokeObjectURL(f.state.avatars.get(CLUB).url);
+  assert.equal(f.shareUrl(), PAGES_BASE_URL + '#g=' + INVITE);
+  assert.equal(f.SERVICE_BASE, SUPABASE_API + SUPABASE_API_PREFIX);
+
+  f.state.invite = null; f.state.club = CLUB;
+  await f.apiFetch('/api/board');
+  assert.equal(f.calls.at(-1).url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/board?club=' + CLUB);
+  await f.apiFetch('/api/auth/recovery');
+  assert.equal(f.calls.at(-1).url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/auth/recovery');
+  assert.ok(f.calls.every(call => call.url.startsWith(SUPABASE_API + SUPABASE_API_PREFIX + '/api/')));
+  assert.ok(f.calls.every(call => call.credentials === 'omit' && call.redirect === 'error'));
+  assert.throws(() => f.apiUrl('https://unrelated.supabase.co/api/board'), /请求路径无效/);
+  assert.throws(() => f.apiUrl('/functions/v1/other/api/board'), /请求路径无效/);
+});
+
+test('prefixed manifest mismatch blocks all source proofs at the chosen function path', async () => {
+  const f = frontend({ config: supabaseConfig, handler: url => response({ ...manifest, toApiOrigin: SUPABASE_API, migrationId: '0'.repeat(64) }, url) });
+  await assert.rejects(f.apiFetch('/api/board'), /原设备资料仍保留/);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.calls[0].url, SUPABASE_API + SUPABASE_API_PREFIX + '/api/migration');
+  assert.equal(f.calls[0].body, undefined);
+  assert.equal(f.calls[0].headers.get('X-Tennis-Session'), null);
+  assert.equal(f.localStorage.getItem(oldAccount), ACCOUNT);
+  assert.equal(f.localStorage.getItem(`tennis-club:account:${SUPABASE_API}:${PAGES_BASE_URL}`), null);
+});
+
+test('function mode has no cookie-page bridge or redirect loop and retains recovery login', () => {
+  const f = frontend({ config: supabaseConfig, entries: {}, hash: '#g=' + INVITE });
+  f.state.board = { club: { id: CLUB }, me: null };
+  assert.ok(!f.joinBanner().includes('data-action="link-pages"'));
+  assert.ok(f.joinBanner().includes('data-action="login"'));
+  let recoveryOpened = 0, redirects = 0;
+  f.context.openRecoveryLogin = () => { recoveryOpened++; };
+  f.location.assign = () => { redirects++; };
+  f.beginPagesLink();
+  assert.equal(recoveryOpened, 1);
+  assert.equal(redirects, 0);
+  assert.equal(f.calls.length, 0);
+  f.state.linkIntent = NONCE;
+  f.showPagesLink();
+  assert.equal(f.state.linkShown, false);
+  assert.equal(f.shareUrl(), PAGES_BASE_URL + '#g=' + INVITE);
+
+  const memberKey = `tennis-club:member:${SUPABASE_API}:${PAGES_BASE_URL}`;
+  const returned = frontend({ config: supabaseConfig, entries: {}, hash: `#g=${INVITE}&session=${MEMBER}&state=${NONCE}`,
+    sessionEntries: { [memberKey + ':link']: JSON.stringify({ nonce: NONCE, invite: INVITE, created: Date.now() }) } });
+  assert.equal(returned.state.session, null);
+  assert.equal(returned.localStorage.getItem(memberKey), null);
+  assert.equal(returned.state.linkFailed, true);
+  assert.deepEqual(returned.replacements, [PAGES_BASE_URL + '#g=' + INVITE]);
+  assert.equal(returned.calls.length, 0);
 });

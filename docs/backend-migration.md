@@ -1,54 +1,87 @@
-# 独立后台迁移
+# 免费 Supabase 后台迁移
 
-分享入口保持 GitHub Pages。后台使用 Node.js 22.13 或更新版本、SQLite 和本地头像文件，不依赖 Cloudflare 或 Sites 运行时。群友不用注册托管平台账户。
+分享入口保持 [GitHub Pages](https://zjwzkongqc.github.io/applications-mentioned-by-the-user-appshot/)。共享后台使用 Supabase Free：Postgres 保存共同记录，private Storage 保存头像，Edge Functions 执行应用自己的免密码身份与权限检查。群友无需注册托管平台。
 
-这是迁移准备方案。新服务地址、由群友实际验证的可达性、完整数据备份以及最终切换均需落实后才能称为迁移完成。仅发布源码不会迁移数据。
+这是部署与迁移准备说明。**目前新免费后台尚未完成实际部署、原数据导入和微信访问验收。** 完成这些步骤后才切换公开网页；提交源码不会自动迁移数据。
 
-## 运行环境
+## 群主首次准备
+
+1. 在 [Supabase](https://supabase.com/dashboard/sign-up) 使用 **Continue with GitHub** 登录，创建 Free organization 和一个 Free project。
+2. 优先选择 **Southeast Asia (Singapore)**，具体区域为 `ap-southeast-1`。可选项受当时容量与账户免费项目配额影响。
+3. 使用创建页面的密码生成功能，私下保存数据库密码。不要把密码、服务密钥或平台 access token 发进聊天、群、邀请链接或仓库。
+4. 提供公开项目 URL：`https://<project-ref>.supabase.co`。公开 URL 不能代替平台部署权限。
+
+标准 Free 项目创建流程无需购买套餐或绑定付费信用卡。只保留 Free 方案，不启用收费附加项。新平台的首次账户建立仍需群主本人完成。
+
+## GitHub 部署准备版本
+
+在 Supabase 创建 scoped personal access token，只选择这个项目，授予 **Database Read-write** 和 **Edge Functions Read-write**。将 token 私下存入 GitHub 仓库 Settings → Secrets and variables → Actions → Secrets，名称为 `SUPABASE_ACCESS_TOKEN`。不需要授予计费、组织管理、其他项目或 API 服务密钥的读取权限。
+
+在 [Supabase 部署工作流](https://github.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/actions/workflows/deploy-supabase.yml) 手动运行并填写 `project_ref`。项目 ref 是公开 URL 中 `.supabase.co` 前面的 20 位小写字母。工作流检查源码、运行测试、构建函数、初始化应用 schema 并部署 `tennis-api`；不会上传快照、自动清空数据库或自动切换 Pages。
+
+建表使用 Management API，不需要把数据库密码或 service role key 提供给 GitHub。该 SQL API 当前标记为 Beta；若平台接口不可用，可在 Dashboard SQL Editor 执行 `supabase/migrations/` 中的应用 schema。函数手动发布也可使用 Edge Functions → **Deploy a new function → Via Editor**，粘贴构建产生的完整 `dist/supabase/tennis-api.ts`。
+
+函数配置 `verify_jwt=false`，使原邀请与免密码 session 能进入应用自己的验证逻辑。这不是取消业务权限检查。Schema 启用应用表 RLS、撤销浏览器角色权限，并建立 private `tennis-avatars` 桶。
+
+运行时平台默认注入 `SUPABASE_URL`、`SUPABASE_DB_URL` 和 `SUPABASE_SERVICE_ROLE_KEY`；这些连接和服务密钥只在 Edge 内部使用，不写入网页 `config.js`。若数据库 TLS 需要专用 CA，可在平台设置 `TENNIS_DB_CA_PEM`，仍保留证书验证。仅在自动配置该环境变量时，token 另需 **Edge Function Secrets Read-write**；正常首次部署不需要这项权限。
+
+## 地址与迁移配置
+
+函数入口为 `https://<project-ref>.supabase.co/functions/v1/tennis-api`，健康检查路径为该入口后的 `/healthz`。
+
+`supabase/functions/tennis-api/migration-config.mjs` 保存公开的迁移编号、经核验的原后台 origin、Pages 地址和 ECDSA 验证公钥。这些值不是用户凭据；签名私钥不在仓库。正常部署无需另行填写迁移秘密环境变量。
+
+目标后台未收到完整校验的导入凭证时，共享 API 保持不可用，避免朋友在一份空的新数据中建立账户或记录。健康检查成功只代表服务已响应，不代表导入或手机验收完成。
+
+## 迁移顺序
+
+1. 先部署新后台准备版本，保留原服务可用。请原先打不开页面的群友在大陆实际手机、微信和网络中测试 GitHub 分享页与新服务地址。区域距离较近不等于已验证可达。
+2. 核对公开迁移配置中的编号、原 origin、新项目 origin 和 Pages 地址，整个流程使用同一组值。先验证目标数据库、private 头像桶和导入权限。
+3. 为原服务安排短暂维护窗口，暂停写入并等待在途写入结束。`scripts/build-migration-export.mjs` 只在明确调用时生成临时管理导出版，正常发布不会包含它。管理员在原平台的秘密环境变量设置随机 `TENNIS_MIGRATION_ADMIN_TOKEN`，并开启 `TENNIS_MIGRATION_FREEZE=1`。
+4. 服务端私有导出读取同一个数据库批次中的全部 11 张表，以及每个引用头像的原字节、类型和 SHA-256。缺对象、失败或超过 32 MiB 时拒绝半份备份。只读列表或抽样检查不能替代这份一致快照。
+5. 快照和签名私钥只保存在仓库之外的私有目录中，目录权限 0700、文件 0600。快照不会通过 GitHub、Pages、构建产物或公开下载接口传递。
+6. 管理员使用 `scripts/send-supabase-backup.mjs` 将完整快照直接通过 HTTPS 发送到目标的 `/functions/v1/tennis-api/api/_owner/migration-import`。请求签名覆盖原字节 SHA-256、五分钟时间窗口、随机 nonce 和迁移元组。该接口不接受浏览器 Origin、Cookie 或普通登录凭据，不开放 CORS。无需将私有签名密钥部署到目标服务。
+7. 导入拒绝已有应用数据的目标，验证记录字段、关系、头像字节和哈希。全部内容成功写入后才发布迁移凭证；失败不得开放半份群数据。同一已成功快照的签名重试可确认原凭证，不能替换已有数据。响应未确认时先检查目标凭证，不清空或覆盖数据。失败时保留私有暂存头像，重试仅复用字节、类型与哈希完全匹配的对象；不自动删除，以免断线后的延迟删除误伤已经成功导入的头像。
+8. 校验原账户、恢复码、仍有效的设备凭据、原成员编号、群主权限、头像、签到、训练记录与六维成长数据。迁移只读身份验证接口不会生成新账户或登录凭据。
+9. 在 GitHub Actions Variables 设置下表配置并重新运行 Pages 工作流。原设备打开 GitHub 链接后，网页只有在目标、迁移编号和服务器凭证匹配时才保留原身份；再用另一设备的本人恢复码验证找回。原群邀请链接继续有效。
+10. 手机端验收通过后，原后台保持停止写入，并移除临时导出管理员秘密，避免两份群数据分别更新。
+
+| Pages Actions Variable | 切换时的值 |
+| --- | --- |
+| `TENNIS_API_BASE_URL` | `https://<project-ref>.supabase.co`，不带路径 |
+| `TENNIS_API_PATH_PREFIX` | `/functions/v1/tennis-api` |
+| `TENNIS_MIGRATION_FROM_ORIGIN` | 同一原后台 origin |
+| `TENNIS_MIGRATION_ID` | 同一迁移编号 |
+
+私有发送工具的参数只传路径和公开 origin，不传私钥内容：
 
 ```sh
-node scripts/build-node.mjs
+node scripts/send-supabase-backup.mjs \
+  --input /private/migration/snapshot.json \
+  --signing-key /private/migration/signing-key.pk8 \
+  --origin 'https://<project-ref>.supabase.co'
 ```
 
-配置以下环境变量后执行 `node server/main.mjs`：
+上述路径仅为格式示例，不能把私有文件放进源码目录。`scripts/import-supabase-backup.mjs` 保留作为 owner 的私有直接导入维护工具；其数据库连接和 service key 只能通过私有 0600 配置文件、标准输入或明确选择的环境变量读取。
 
-| 变量 | 用途 |
-| --- | --- |
-| `PUBLIC_API_ORIGIN` | 新后台实际 HTTPS origin，仅主机名，无路径、账号、查询或片段；Render 自动使用平台注入的 `RENDER_EXTERNAL_URL`，自托管需填写 |
-| `DATA_DIR` | 源码目录之外的专用持久目录，存放 `tennis.sqlite`、头像和迁移凭证 |
-| `PORT` | 托管平台提供的监听端口，默认 3000 |
-| `MIGRATION_ID` | 本次迁移固定的随机 64 位小写十六进制编号，不是登录凭据 |
-| `MIGRATION_FROM_ORIGIN` | 经确认的原后台完整 origin |
-| `MIGRATION_PAGE_BASE_URL` | 本仓库 GitHub Pages 完整地址，包含末尾 `/` |
-| `TRUST_PROXY_HOPS` | 默认 0；仅在确认公网只经可信代理进入且代理追加/覆盖真实地址后设置 |
-| `MAINTENANCE_MODE` | 设置为 `1` 时只提供维护与健康检查，不打开数据库或头像存储，供离线导入使用 |
+## 免费额度、维护与回退
 
-运行时执行数据库迁移；不能在构建阶段创建数据库或把数据库放进发布目录。仅运行一个服务实例。健康检查为 `/healthz`。配置迁移编号但尚无已校验导入凭证时，共享 API 保持不可用，避免建立一份空的群记录。
+当前 Free 包含 500 MB 数据库、1 GB 文件存储、每月 50 万次 Edge 调用、5 GB 普通出站流量及 5 GB 缓存出站流量，最多 2 个活跃免费项目。当前群数据量小，仍须监测实际用量；长期记录和头像会逐渐增长。
 
-## 费用与平台
+低活跃持续 7 天可能触发自动暂停，即使偶尔使用也不能保证免暂停。群主可在 Dashboard 点击 **Resume project**；最新官方规则允许暂停后最多 1 年内恢复。Free 不提供始终在线保证，也不提供可下载的 Dashboard 数据库备份。持续维护应安排独立的私有备份，不能把私有数据上传公开仓库。
 
-`render.yaml` 是一个可选的 Render 付费部署配置，服务与 1GB 持久盘的基础费用约 **7.25 美元/月**，额外用量与税费另计。创建资源前需账户所有者接受实际结算页价格。免费实例不能挂持久盘，不能用于此数据库与头像存储。参见 [定价](https://render.com/pricing) 与 [持久盘说明](https://render.com/docs/disks)。
+切换前的故障可恢复原服务写入并保留原 Pages 配置。切换后若新后台已接受写入，必须先暂停并备份新数据、同步差异后再回退；不能直接用旧快照覆盖新记录。原快照、旧设备身份和恢复凭据应保留至迁移验收完成。
 
-已有服务器也可直接运行同一 Node 后台，但必须具备实际持久目录和可信 HTTPS 地址。新加坡或香港等区域的部署不代表已验证大陆微信访问；正式切换前，必须请原先打不开的群友在其手机和网络上测试新服务。
+账户仍使用应用自己的免密码身份。同一设备、同一浏览器记住本人；换设备或清理缓存后使用本人保存的私密恢复码。仅凭昵称无法认领旧成员，退出本设备后也不会再次自动导入旧身份。
 
-## 数据迁移顺序
+## 官方参考
 
-1. 部署新服务的准备版本，保持原服务可用，先测试新域名的访问。
-2. 为原服务安排短暂维护窗口，暂停写入并等待在途请求完成。`scripts/build-migration-export.mjs` 可显式生成原 Worker 的临时管理导出版；正常构建不会包含它。管理员通过托管平台的秘密环境变量配置随机 `TENNIS_MIGRATION_ADMIN_TOKEN`，开启 `TENNIS_MIGRATION_FREEZE=1` 后才允许服务端私有导出，普通写入返回维护提示。固定 11 张表在一个数据库批次中读取，包含每个被引用的头像字节；缺对象、失败或超出 32MiB 时拒绝输出半份备份。管理员凭据不能进入网页、仓库、URL 或日志。只读分页检查只能作为预检，不能替代最终一致快照。
-3. 将快照保存在仓库之外的私有目录，权限目录 0700、文件 0600。快照必须包含全部记录、头像字节和校验信息；不得进入 GitHub、Pages、构建产物或公开链接。
-4. 停止目标后台进程后运行 `scripts/import-backup.mjs`，按工具列出的参数传入私有快照、目标目录及固定迁移元组。Render 可先部署 `MAINTENANCE_MODE=1` 并确认 `/healthz` 返回 `maintenance:true`，再在 Shell 导入；Blueprint 初始即使用此模式。导入拒绝非空目标，验证表结构、外键及头像哈希，完成后写入私有迁移凭证。目标进程不得持有数据库，避免旧 SQLite 句柄继续访问已替换的文件。
-5. 关闭维护模式，重新部署或重启目标后台，校验原账户、登录凭据、恢复码、原成员编号、群主权限、头像、签到、训练记录与六维成长数据。迁移只读验证接口不得生成账户或新的登录凭据。
-6. 在 GitHub 仓库 Settings → Secrets and variables → Actions → Variables 设置 `TENNIS_API_BASE_URL` 为新后台 origin、`TENNIS_MIGRATION_FROM_ORIGIN` 为原后台 origin、`TENNIS_MIGRATION_ID` 为同一迁移编号，重新运行 Pages 工作流。
-7. 在原设备打开 GitHub 链接，网页经只读验证后保留原身份；再用另一设备的私密恢复码验证找回。原群邀请链接继续有效。新后台与 Pages 验证通过后结束新服务维护，旧后台保持停止写入并移除临时导出管理员秘密，防止两份数据各自更新。
-
-独立后台的健康检查成功，只代表进程和数据库可读；不代表已导入真实数据或接收方网络已经可达。导入脚本完成也不能替代手机上的端到端验收。
-
-## 回退
-
-切换前的故障可恢复原服务写入并保留原 Pages 配置。切换后如果新后台已经接受写入，回退必须先暂停写入并备份新数据，再同步差异；不能直接用旧快照覆盖新记录。原后台备份、旧浏览器身份和恢复凭据应保留至迁移验收完成。
-
-## 隐私与身份
-
-迁移保留服务端哈希和原到期时间，不延长过期登录。网页只在发布配置中的目标地址、迁移元组和服务器凭证全部匹配时验证旧浏览器身份，保留旧键且不覆盖不同身份。恢复码不会放入迁移配置、邀请链接或源码。退出本设备后不会再次自动导入旧身份。
-
-账户机制仍为本应用的免密码身份，不是微信官方登录。同一微信或浏览器自动记住本人；换设备或清理缓存后使用本人保存的私密恢复码。
+- [免费额度与价格](https://supabase.com/pricing)
+- [项目暂停与恢复](https://supabase.com/docs/guides/platform/free-project-pausing)
+- [支持区域](https://supabase.com/docs/guides/platform/regions)
+- [计费与信用卡要求](https://supabase.com/docs/guides/platform/get-set-up-for-billing)
+- [Dashboard 部署函数](https://supabase.com/docs/guides/functions/quickstart-dashboard)
+- [函数发布与 GitHub Actions](https://supabase.com/docs/guides/functions/deploy)
+- [函数环境变量](https://supabase.com/docs/guides/functions/secrets)
+- [Scoped access token 权限](https://supabase.com/docs/guides/platform/personal-access-tokens)
+- [Management API 官方 OpenAPI](https://github.com/supabase/supabase/blob/master/apps/docs/spec/api_v1_openapi.json)

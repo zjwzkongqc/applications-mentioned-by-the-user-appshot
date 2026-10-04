@@ -1,0 +1,7 @@
+project_id = "tennis-dazi-club-2026"
+
+[functions.tennis-api]
+# The application checks its own private recovery-code sessions. Platform JWT
+# validation must not reject the existing group invite Authorization header.
+verify_jwt = false
+entrypoint = "./functions/tennis-api/index.ts"

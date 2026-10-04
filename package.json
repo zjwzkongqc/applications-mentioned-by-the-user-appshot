@@ -8,17 +8,23 @@
     "db:generate": "drizzle-kit generate",
     "dev": "wrangler dev --config dist/server/wrangler.json --persist-to .wrangler/state --ip 127.0.0.1 --port 5173",
     "db:migrate:local": "wrangler d1 migrations apply DB --local --config wrangler.json --persist-to .wrangler/state",
-    "check": "node --check src/worker.js && node --check src/app.js && node --check src/hexagon.js && node --check src/growth.js && node --check scripts/build-pages.mjs && node --check scripts/build-pages-ci.mjs && node --check scripts/build-node.mjs && node --check scripts/backup-format.mjs && node --check scripts/import-backup.mjs && node --check scripts/migration-export-worker.mjs && node --check scripts/build-migration-export.mjs && node --check server/storage.mjs && node --check server/http.mjs && node --check server/main.mjs && node --check server/migration.mjs",
-    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/worker.js && node --check src/app.js && node --check src/hexagon.js && node --check src/growth.js && node --check scripts/build-pages.mjs && node --check scripts/build-pages-ci.mjs && node --check scripts/build-node.mjs && node --check scripts/backup-format.mjs && node --check scripts/import-backup.mjs && node --check scripts/migration-export-worker.mjs && node --check scripts/build-migration-export.mjs && node --check server/storage.mjs && node --check server/http.mjs && node --check server/main.mjs && node --check server/migration.mjs && node --check scripts/build-supabase.mjs && node --check scripts/import-supabase-backup.mjs && node --check scripts/send-supabase-backup.mjs && node --check supabase/functions/tennis-api/postgres.mjs && node --check supabase/functions/tennis-api/storage.mjs && node --check supabase/functions/tennis-api/migration.mjs && node --check supabase/functions/tennis-api/handler.mjs && node --check supabase/functions/tennis-api/import.mjs && node --check supabase/functions/tennis-api/owner-import.mjs && node --check supabase/functions/tennis-api/migration-config.mjs && node --check scripts/deploy-supabase.mjs",
+    "test": "node scripts/build-supabase.mjs && node --test test/*.test.mjs",
     "build:pages": "node scripts/build-pages.mjs",
     "build:pages:ci": "node scripts/build-pages-ci.mjs",
     "build:node": "node scripts/build-node.mjs",
     "start:backend": "node server/main.mjs",
-    "import:backup": "node scripts/import-backup.mjs"
+    "import:backup": "node scripts/import-backup.mjs",
+    "build:supabase": "node scripts/build-supabase.mjs",
+    "import:supabase": "node scripts/import-supabase-backup.mjs",
+    "send:supabase": "node scripts/send-supabase-backup.mjs",
+    "deploy:supabase": "node scripts/deploy-supabase.mjs"
   },
   "devDependencies": {
     "drizzle-kit": "0.31.8",
     "drizzle-orm": "0.44.7",
+    "esbuild": "0.25.12",
+    "postgres": "3.4.7",
     "wrangler": "4.45.0"
   }
 }
