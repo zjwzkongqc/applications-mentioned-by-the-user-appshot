@@ -23,35 +23,34 @@ jobs:
         uses: actions/checkout@v5
         with:
           persist-credentials: false
-
       - name: Set up Node.js
         uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
-
       - name: Install dependencies
         run: npm ci
-
       - name: Check source
         run: npm run check
-
       - name: Verify application behavior
         run: npm test
-
-      - name: Build GitHub Pages application
+      - name: Build original GitHub Pages application
         env:
           TENNIS_API_BASE_URL: ${{ vars.TENNIS_API_BASE_URL }}
           TENNIS_API_PATH_PREFIX: ${{ vars.TENNIS_API_PATH_PREFIX }}
           TENNIS_MIGRATION_FROM_ORIGIN: ${{ vars.TENNIS_MIGRATION_FROM_ORIGIN }}
           TENNIS_MIGRATION_ID: ${{ vars.TENNIS_MIGRATION_ID }}
         run: npm run build:pages:ci
-
+      - name: Add separate new app without changing original output
+        run: |
+          sha256sum dist/pages/index.html dist/pages/config.js > /tmp/original-root.sha256
+          node scripts/build-fresh-pages.mjs
+          sha256sum -c /tmp/original-root.sha256
+          node --check dist/pages/fresh/app.js
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
-
       - name: Upload GitHub Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -68,3 +67,37 @@ jobs:
       - name: Publish GitHub Pages application
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify-published:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Install pinned browser tools
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false playwright@1.55.0
+          npx playwright install --with-deps chromium
+      - name: Verify actual published Pages and live Supabase
+        env:
+          LIVE_PAGES: '1'
+        run: node test/fresh-live-browser.mjs
+      - name: Save sanitized verification results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fresh-published-verification
+          path: |
+            fresh-live-report.json
+            fresh-welcome.png
+          if-no-files-found: ignore
+          retention-days: 7
