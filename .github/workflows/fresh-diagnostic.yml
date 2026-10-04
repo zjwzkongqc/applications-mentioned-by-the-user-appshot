@@ -1,0 +1,32 @@
+name: Diagnose fresh anonymous frontend
+on:
+  push:
+    branches: [codex/fresh-tennis-20261004]
+    paths: ['.github/workflows/fresh-diagnostic.yml', 'test/fresh-browser-diagnostic.mjs']
+permissions:
+  contents: read
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+      - run: |
+          node scripts/build-fresh-pages.mjs
+          npm install --no-save --package-lock=false --ignore-scripts playwright@1.55.0
+          npx playwright install chromium
+      - run: node test/fresh-browser-diagnostic.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fresh-anonymous-diagnostic
+          path: |
+            fresh-diagnostic.json
+            fresh-diagnostic.png
+          if-no-files-found: ignore
+          retention-days: 1
