@@ -62,10 +62,10 @@ export async function buildPages({ output = path.join(root, 'dist/pages'), env =
   }
   await fs.writeFile(path.join(output, 'config.js'), `window.TENNIS_CONFIG = Object.freeze(${JSON.stringify(config, null, 2)});\n`);
 
-  await Promise.all(['style.css', 'app.js', 'hexagon.js', 'growth.js'].map(file =>
+  await Promise.all(['style.css', 'app.js', 'hexagon.js', 'growth.js', 'club-ui.js'].map(file =>
     fs.copyFile(path.join(root, 'src', file), path.join(output, file))
   ));
-  for (const file of ['config.js', 'style.css', 'app.js', 'hexagon.js', 'growth.js']) {
+  for (const file of ['config.js', 'style.css', 'app.js', 'hexagon.js', 'growth.js', 'club-ui.js']) {
     const version = createHash('sha256').update(await fs.readFile(path.join(output, file))).digest('hex').slice(0, 12);
     html = html.replaceAll(`"./${file}"`, `"./${file}?v=${version}"`);
   }
