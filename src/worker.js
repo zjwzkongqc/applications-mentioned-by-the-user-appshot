@@ -1,6 +1,8 @@
 /*__ASSETS__*/
 const encoder = new TextEncoder();
 const MAX_BODY = 20000;
+const PAGES_ORIGIN = 'https://zjwzkongqc.github.io';
+const pagesRequest = r => r.headers.get('Origin') === PAGES_ORIGIN;
 const MOODS = ['手感在线','快乐拉球','认真练球','虽败犹荣','饭后消食'];
 const EMOJIS = ['👏','🔥','🎾'];
 const SKILLS = ['forehand','backhand','serve','return_skill','net','footwork'];
@@ -28,15 +30,17 @@ function json(data,status=200,extra={}){return new Response(JSON.stringify(data)
 async function digest(s){return [...new Uint8Array(await crypto.subtle.digest('SHA-256',encoder.encode(s)))].map(b=>b.toString(16).padStart(2,'0')).join('');}
 function secret(){return [...crypto.getRandomValues(new Uint8Array(32))].map(b=>b.toString(16).padStart(2,'0')).join('');}
 function cookie(r){return r.headers.get('Cookie')?.match(/(?:^|;\s*)tc_session=([a-f0-9]{64})(?:;|$)/)?.[1] || null;}
+function session(r){const token=r.headers.get('X-Tennis-Session');return token!==null?(/^[a-f0-9]{64}$/.test(token)?token:null):cookie(r);}
+function sessionResult(data,token,r){return pagesRequest(r)?{...data,sessionToken:token}:data;}
 function cookieHeader(token,url){return {'Set-Cookie':`tc_session=${token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=31536000${url.protocol==='https:'?'; Secure':''}`};}
 async function body(r){if(Number(r.headers.get('Content-Length'))>MAX_BODY)problem('填写的内容太长了。',413);if(!r.headers.get('Content-Type')?.includes('application/json'))problem('请使用页面中的表单提交。',415);let raw=await r.text();if(raw.length>MAX_BODY)problem('填写的内容太长了。',413);try{return JSON.parse(raw);}catch{problem('内容格式不正确，请重试。');}}
 function str(v,max,required=false){if(typeof v!=='string')problem('请填写有效的文字。');v=v.trim();if(v.length>max || (required&&!v))problem(required?`请填写内容，最多 ${max} 个字。`:`内容最多 ${max} 个字。`);return v;}
 function id(v){if(typeof v!=='string'||! /^[a-f0-9-]{36}$/.test(v))problem('记录编号无效。');return v;}
 function recordInput(b){const date=str(b.playDate,10,true),parsed=new Date(`${date}T00:00:00Z`);if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==date)problem('请选择有效的打球日期。');const tomorrow=new Date(Date.now()+86400000).toISOString().slice(0,10);if(date>tomorrow)problem('还没发生的场次，等打完再记。');const minutes=Number(b.minutes);if(!Number.isInteger(minutes)||minutes<1||minutes>1440)problem('时长请填 1–1440 分钟。');if(!MOODS.includes(b.mood))problem('请选择今天的状态。');return {date,minutes,partners:str(b.partners||'',120),venue:str(b.venue||'',60),mood:b.mood,note:str(b.note||'',500)};}
 function db(env){if(!env.DB)problem('小本本暂时连不上，请稍后再试。',503);return {one:(sql,...args)=>env.DB.prepare(sql).bind(...args).first(),all:async(sql,...args)=>(await env.DB.prepare(sql).bind(...args).all()).results,run:(sql,...args)=>env.DB.prepare(sql).bind(...args).run(),batch:(statements)=>env.DB.batch(statements.map(([sql,...args])=>env.DB.prepare(sql).bind(...args)))};}
-async function context(r,q){const invite=r.headers.get('Authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];if(!invite)problem('请从群里的邀请链接进入。',401);const club=await q.one('SELECT * FROM clubs WHERE invite_hash = ?',await digest(invite));if(!club)problem('邀请链接无效，请向群友要一个新链接。',404);const token=cookie(r);const me=token?await q.one('SELECT * FROM members WHERE club_id = ? AND session_hash = ?',club.id,await digest(token)):null;return {club,me};}
+async function context(r,q){const invite=r.headers.get('Authorization')?.match(/^Bearer ([a-f0-9]{64})$/)?.[1];if(!invite)problem('请从群里的邀请链接进入。',401);const club=await q.one('SELECT * FROM clubs WHERE invite_hash = ?',await digest(invite));if(!club)problem('邀请链接无效，请向群友要一个新链接。',404);const token=session(r);const me=token?await q.one('SELECT * FROM members WHERE club_id = ? AND session_hash = ?',club.id,await digest(token)):null;return {club,me};}
 function memberOnly(c){if(!c.me)problem('先取个昵称，加入球友名片吧。',401);return c.me;}
-export default {
+const handler = {
   async fetch(r,env){const url=new URL(r.url);try{
     if(r.method==='GET' && !url.pathname.startsWith('/api/')){
       const security={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob: data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://chatgpt.com https://*.chatgpt.com"};
@@ -50,20 +54,20 @@ export default {
     }
     if(!url.pathname.startsWith('/api/'))return json({error:'页面不存在'},404);
     if(r.method!=='GET'){
-      const origin=r.headers.get('Origin');if(origin&&origin!==url.origin)problem('请在原页面完成操作。',403);
-      if(r.headers.get('Sec-Fetch-Site')==='cross-site')problem('请在原页面完成操作。',403);
+      const origin=r.headers.get('Origin');if(origin&&origin!==url.origin&&!pagesRequest(r))problem('请在原页面完成操作。',403);
+      if(r.headers.get('Sec-Fetch-Site')==='cross-site'&&!pagesRequest(r))problem('请在原页面完成操作。',403);
     }
     const q=db(env);
     if(url.pathname==='/api/clubs'&&r.method==='POST'){
       const b=await body(r), name=str(b.name,24,true), slogan=str(b.slogan||'',80), nickname=str(b.nickname,20,true);
-      const token=cookie(r)||secret(), sessionHash=await digest(token);
+      const token=session(r)||secret(), sessionHash=await digest(token);
       if(Number((await q.one('SELECT COUNT(*) AS n FROM members WHERE session_hash = ?',sessionHash)).n)>=5)problem('你已经有 5 本群小本本了，先用现有的吧。');
       const invite=secret(),clubId=crypto.randomUUID(),memberId=crypto.randomUUID(),now=new Date().toISOString();
       await q.batch([
         ['INSERT INTO clubs(id,invite_hash,name,slogan,owner_id,created_at) VALUES(?,?,?,?,?,?)',clubId,await digest(invite),name,slogan,memberId,now],
         ['INSERT INTO members(id,club_id,session_hash,nickname,bio,created_at) VALUES(?,?,?,?,?,?)',memberId,clubId,sessionHash,nickname,'',now]
       ]);
-      return json({invite},201,cookieHeader(token,url));
+      return json(sessionResult({invite},token,r),201,cookieHeader(token,url));
     }
     const c=await context(r,q);
     if(url.pathname==='/api/board'&&r.method==='GET'){
@@ -93,13 +97,17 @@ export default {
       const nextPlan=await q.one("SELECT id,play_date,next_plan,training_projects FROM records WHERE member_id=? AND next_plan!='' ORDER BY play_date DESC,created_at DESC LIMIT 1",me.id);
       return json({today,month,page,pageSize:20,summary:{...summary,training_sessions:Number(summary.training_sessions||0),checkin_days:dates.size,streak,checkedToday:dates.has(today)},checkins:monthCheckins,trainingDays,records,history,nextPlan});
     }
+    if(url.pathname==='/api/pages-session'&&r.method==='POST'){
+      if(r.headers.get('Origin')!==url.origin||r.headers.has('X-Tennis-Session')||!cookie(r))problem('请从原页面连接自己的名片。',403);
+      memberOnly(c);return json({sessionToken:cookie(r)});
+    }
     if(url.pathname==='/api/profile'&&r.method==='POST'){
       const b=await body(r),nickname=str(b.nickname,20,true),bio=str(b.bio||'',80);
       if(c.me){await q.run('UPDATE members SET nickname=?,bio=? WHERE id=? AND club_id=?',nickname,bio,c.me.id,c.club.id);return json({id:c.me.id});}
-      const token=cookie(r)||secret(), sessionHash=await digest(token),memberId=crypto.randomUUID();
+      const token=session(r)||secret(), sessionHash=await digest(token),memberId=crypto.randomUUID();
       await q.run('INSERT INTO members(id,club_id,session_hash,nickname,bio,created_at) VALUES(?,?,?,?,?,?) ON CONFLICT(club_id,session_hash) DO UPDATE SET nickname=excluded.nickname,bio=excluded.bio',memberId,c.club.id,sessionHash,nickname,bio,new Date().toISOString());
       const saved=await q.one('SELECT id FROM members WHERE club_id=? AND session_hash=?',c.club.id,sessionHash);
-      return json({id:saved.id},201,cookieHeader(token,url));
+      return json(sessionResult({id:saved.id},token,r),201,cookieHeader(token,url));
     }
     if(url.pathname==='/api/club'&&r.method==='PATCH'){
       const me=memberOnly(c);if(me.id!==c.club.owner_id)problem('只有创建小本本的球友可以修改群设置。',403);
@@ -154,4 +162,22 @@ export default {
     }
     return json({error:'这个操作暂时不可用。'},404);
   }catch(e){if(!e.status)console.error('Tennis request failed',url.pathname,e.message);return json({error:e.status?e.message:'小本本暂时忙不过来，内容还在，请稍后重试。'},e.status||503);}}
+};
+
+export default {
+  async fetch(r,env){
+    const path=new URL(r.url).pathname,isApi=path.startsWith('/api/'),isBridge=path==='/api/pages-session';
+    const allowed=pagesRequest(r)&&!isBridge;
+    if(r.method==='OPTIONS'&&isApi){
+      const method=r.headers.get('Access-Control-Request-Method');
+      const headers=(r.headers.get('Access-Control-Request-Headers')||'').split(',').map(x=>x.trim().toLowerCase()).filter(Boolean);
+      if(!allowed||!['GET','POST','PATCH','DELETE'].includes(method)||headers.some(x=>!['authorization','content-type','x-tennis-session'].includes(x)))return new Response(null,{status:403,headers:{Vary:'Origin'}});
+      return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':PAGES_ORIGIN,'Access-Control-Allow-Methods':'GET,POST,PATCH,DELETE,OPTIONS','Access-Control-Allow-Headers':'Authorization,Content-Type,X-Tennis-Session','Access-Control-Max-Age':'600',Vary:'Origin'}});
+    }
+    const response=await handler.fetch(r,env);
+    if(!isApi)return response;
+    const headers=new Headers(response.headers);headers.append('Vary','Origin');
+    if(allowed)headers.set('Access-Control-Allow-Origin',PAGES_ORIGIN);
+    return new Response(response.body,{status:response.status,statusText:response.statusText,headers});
+  }
 };
