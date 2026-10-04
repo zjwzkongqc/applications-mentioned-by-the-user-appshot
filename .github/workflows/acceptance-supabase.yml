@@ -1,0 +1,76 @@
+name: Test six members on isolated live Supabase
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/supabase-free-preflight-20261004]
+    paths:
+      - '.github/workflows/acceptance-supabase.yml'
+      - 'deploy/supabase-acceptance/**'
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: tennis-isolated-live-acceptance
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - name: Check scenario syntax
+        run: node --check deploy/supabase-acceptance/scenarios.mjs
+      - name: Install dependencies and run existing application tests
+        run: npm ci && npm run check && npm test
+      - name: Verify public boundaries and run isolated acceptance
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const origin = 'https://kvbxmvwtblwibhesnleh.supabase.co';
+          const endpoint = origin + '/functions/v1/tennis-acceptance/run';
+          const safeFetch = (url, options = {}) => fetch(url, { redirect: 'error', signal: AbortSignal.timeout(130000), ...options });
+          const denied = await safeFetch(endpoint, { method: 'POST', headers: { 'x-region': 'ap-southeast-1' } });
+          assert.equal(denied.status, 401, 'Untrusted callers must not start acceptance runs.');
+          await denied.body?.cancel();
+          const health = await safeFetch(origin + '/functions/v1/tennis-api/healthz', { headers: { Origin: 'https://zjwzkongqc.github.io', 'x-region': 'ap-southeast-1' } });
+          assert.equal(health.status, 200);
+          assert.equal((await health.json()).maintenance, true, 'Original migration receiver must remain closed.');
+          const idUrl = new URL(process.env.ACTIONS_ID_TOKEN_REQUEST_URL);
+          idUrl.searchParams.set('audience', 'tennis-acceptance:kvbxmvwtblwibhesnleh');
+          const idResponse = await safeFetch(idUrl, { headers: { Authorization: 'Bearer ' + process.env.ACTIONS_ID_TOKEN_REQUEST_TOKEN } });
+          assert.equal(idResponse.status, 200, 'GitHub OIDC authorization unavailable.');
+          const token = (await idResponse.json()).value;
+          assert.equal(typeof token, 'string');
+          // Token is held only in process memory; never written to files or logs.
+          const result = await safeFetch(endpoint, { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'x-region': 'ap-southeast-1' } });
+          const report = await result.json();
+          const safe = { httpStatus: result.status, passed: report.passed === true, checks: Array.isArray(report.checks) ? report.checks : [], failedCheck: report.failedCheck || null, cleanup: report.cleanup === true, productionMigrated: false, browserHardwareTested: false, mainlandAccessTested: false, error: report.error || null };
+          await fs.writeFile('acceptance-report.json', JSON.stringify(safe, null, 2));
+          console.log(JSON.stringify(safe, null, 2));
+          await fs.appendFile(process.env.GITHUB_STEP_SUMMARY, '# Isolated live Supabase acceptance\n\n' + JSON.stringify(safe, null, 2) + '\n\nUses synthetic accounts only. Shared handler runs on Supabase with live private PostgreSQL and Storage. This does not prove original-data migration, complete browser operation, or mainland network access. Production receiver and Pages remain unchanged.\n');
+          assert.equal(result.status, 200, 'Isolated acceptance did not complete successfully.');
+          assert.equal(safe.passed, true);
+          assert.equal(safe.cleanup, true, 'Synthetic fixtures must be cleaned up.');
+          const finalHealth = await safeFetch(origin + '/functions/v1/tennis-api/healthz');
+          assert.equal(finalHealth.status, 200);
+          assert.equal((await finalHealth.json()).maintenance, true);
+          NODE
+      - name: Save sanitized result only
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: isolated-supabase-acceptance-result
+          path: acceptance-report.json
+          if-no-files-found: ignore
+          retention-days: 7
