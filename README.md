@@ -6,6 +6,8 @@ GitHub 分享入口：
 
 https://zjwzkongqc.github.io/applications-mentioned-by-the-user-appshot/
 
+该入口及当前 `chatgpt.site` 后台尚未通过中国内地无 VPN 访问验收。国内直连版本采用 **GitHub 管理代码和构建，国内服务器同域运行网页、账号和照片后台**；完整离线部署包与 [国内部署说明](docs/china-deployment.md) 已加入仓库。尚未接入国内服务器、完成原数据迁移或切换分享网址。
+
 点击“邀请搭子 → 复制群邀请链接”后分享到微信群。邀请七天有效，只展示小组名称与口号；球友登录并主动加入后，才能查看组内名片、记录与照片。成员修改自己的内容，后台验证成员关系和归属。
 
 六维指标为正手稳定性、反手稳定性、发球控制、接发球能力、网前截击、移动与回位，每项 0–10 分，也可单独保留“待测”。月度球员卡逐月保存，与自己的上次比较，0 分与待测分开记录。
@@ -62,6 +64,8 @@ npm test
 npm run build:pages
 npm run build:neon
 ```
+
+国内服务器包由 [China server package 工作流](https://github.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/actions/workflows/build-china.yml) 构建，输出同时包含应用与 HTTPS 代理镜像，无需目标服务器启动时从 GitHub、npm 或 Docker Hub 下载运行内容。
 
 网页输出到 `dist/pages`，后台包输出到 `dist/neon/function.zip`，包含入口 `index.mjs`。Neon 表结构位于 `neon/schema.sql`，函数源码位于 `neon/functions/tennis-api/`。
 

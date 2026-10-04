@@ -1,0 +1,44 @@
+name: tennis-dazi-cn
+services:
+  app:
+    image: tennis-dazi-cn:${TENNIS_RELEASE:?Choose the built release}
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    init: true
+    tmpfs:
+      - /tmp:mode=1777
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    environment:
+      PUBLIC_API_ORIGIN: https://${TENNIS_HOSTNAME:?Set the public hostname}
+      MAINTENANCE_MODE: ${MAINTENANCE_MODE:-1}
+    volumes:
+      - app-data:/var/lib/tennis
+    networks: [private]
+    stop_grace_period: 15s
+  proxy:
+    image: tennis-dazi-caddy:2.10.2
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      TENNIS_HOSTNAME: ${TENNIS_HOSTNAME:?Set the public hostname}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - proxy-data:/data
+      - proxy-config:/config
+    networks: [private, public]
+    depends_on:
+      app:
+        condition: service_healthy
+networks:
+  private:
+    internal: true
+  public:
+volumes:
+  app-data:
+  proxy-data:
+  proxy-config:

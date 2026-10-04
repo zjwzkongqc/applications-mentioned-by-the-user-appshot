@@ -1,0 +1,49 @@
+name: Build complete China server package
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - server/**
+      - drizzle/**
+      - deploy/china/**
+      - scripts/build-node.mjs
+      - scripts/build-china-package.mjs
+      - scripts/backup-format.mjs
+      - scripts/import-backup.mjs
+      - .dockerignore
+      - package.json
+      - package-lock.json
+      - test/**
+      - .github/workflows/build-china.yml
+permissions:
+  contents: read
+concurrency:
+  group: china-package
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm test
+      - name: Build frontend, backend and HTTPS proxy as an offline package
+        env:
+          TENNIS_RELEASE: ${{ github.sha }}
+        run: node scripts/build-china-package.mjs
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tennis-china-linux-amd64
+          path: dist/tennis-china-linux-amd64.tar.gz
+          if-no-files-found: error
+          retention-days: 30

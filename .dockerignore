@@ -1,0 +1,14 @@
+*
+!src/
+!src/**
+!server/
+!server/**
+!drizzle/
+!drizzle/**
+!scripts/
+!scripts/build-node.mjs
+!scripts/backup-format.mjs
+!scripts/import-backup.mjs
+!deploy/
+!deploy/china/
+!deploy/china/Dockerfile
