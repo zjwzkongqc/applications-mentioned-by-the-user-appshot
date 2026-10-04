@@ -1,0 +1,109 @@
+name: Prepare Supabase Free trial (no deployment)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - codex/supabase-free-preflight-20261004
+    paths:
+      - '.github/workflows/prepare-supabase-free.yml'
+      - 'docs/supabase-free-setup.md'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'src/**'
+      - 'server/**'
+      - 'test/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+# This workflow only checks and packages code. It has no Pages, database,
+# Supabase deployment, or cloud-account write permissions and reads no secrets.
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-free-preflight-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check application source
+        run: npm run check
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Build the complete Supabase Edge Function
+        run: npm run build:supabase
+
+      - name: Check the schema 5 preparation package
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs/promises';
+          import assert from 'node:assert/strict';
+          const files = [
+            'dist/supabase/tennis-api.ts',
+            'supabase/migrations/20261004000000_tennis_schema.sql',
+            'supabase/migrations/20261004000001_tennis_schema5.sql',
+            'docs/supabase-free-setup.md'
+          ];
+          for (const file of files) {
+            const stat = await fs.stat(file);
+            assert(stat.isFile() && stat.size > 0, `Missing preparation input: ${file}`);
+          }
+          const bundle = await fs.stat(files[0]);
+          assert(bundle.size <= 1024 * 1024, 'Edge bundle exceeds the deployment script size guard.');
+          console.log('Complete Edge source and both schema migrations are present. No cloud changes were made.');
+          NODE
+
+      - name: Upload source-only preparation package
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennis-supabase-free-preflight-${{ github.sha }}
+          retention-days: 7
+          if-no-files-found: error
+          path: |
+            dist/supabase/tennis-api.ts
+            supabase/migrations/20261004000000_tennis_schema.sql
+            supabase/migrations/20261004000001_tennis_schema5.sql
+            docs/supabase-free-setup.md
+
+      - name: Record what is and is not verified
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          ## Supabase Free preparation — not a deployment
+
+          | Item | Status |
+          | --- | --- |
+          | Source checks and automated test command | Completed; review test logs for skipped infrastructure cases |
+          | Complete Edge Function and schema 5 SQL package | Built |
+          | Supabase account connection / Free plan verified | NOT checked by this workflow |
+          | Database or Edge Function deployed | NOT attempted |
+          | Original records or photos migrated | NOT attempted |
+          | Live GitHub Pages backend switched | NOT attempted |
+          | Live login, cross-device saving and authorization | NOT tested |
+          | Mainland mobile-network access | NOT tested |
+
+          Next gate: connect the owner's Supabase account, confirm a Free project,
+          then complete the data-migration/initialization and live acceptance checks
+          in `docs/supabase-free-setup.md`. No secrets or private data are included
+          in the preparation artifact. A green run is not a live-site acceptance.
+          SUMMARY
