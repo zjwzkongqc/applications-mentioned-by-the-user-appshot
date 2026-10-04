@@ -1,0 +1,67 @@
+name: Verify live Supabase migration receiver
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/supabase-free-preflight-20261004]
+    paths: ['.github/workflows/verify-supabase-receiver.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify actual HTTPS responses without credentials or writes
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          base = 'https://kvbxmvwtblwibhesnleh.supabase.co/functions/v1/tennis-api'
+          def read(path):
+              request = urllib.request.Request(base + path, headers={
+                  'Accept': 'application/json',
+                  'Origin': 'https://zjwzkongqc.github.io',
+                  'User-Agent': 'tennis-receiver-readiness-check/1.0'
+              })
+              try:
+                  response = urllib.request.urlopen(request, timeout=40)
+              except urllib.error.HTTPError as error:
+                  response = error
+              with response:
+                  status = response.status
+                  raw = response.read(4097)
+                  if len(raw) > 4096:
+                      raise AssertionError('Unexpectedly large response; not printed.')
+                  try:
+                      data = json.loads(raw)
+                  except (ValueError, UnicodeError):
+                      raise AssertionError('Response was not valid JSON; body not printed.')
+                  if not isinstance(data, dict):
+                      raise AssertionError('Unexpected response shape; body not printed.')
+                  safe = {k: data[k] for k in ('ok', 'maintenance', 'ready') if k in data}
+                  print(path, 'HTTP', status, json.dumps(safe))
+                  return status, data, response.headers
+
+          status, data, headers = read('/healthz')
+          assert status == 200 and data.get('ok') is True, 'The live function/database health check did not pass.'
+          assert data.get('maintenance') is True, 'Do not treat an unverified receiver as a ready application.'
+          assert headers.get('Access-Control-Allow-Origin') == 'https://zjwzkongqc.github.io', 'Pages CORS origin mismatch.'
+          for path in ('/api/auth/me', '/api/board'):
+              status, data, headers = read(path)
+              assert status == 503 and data.get('ready') is False, 'The uninitialized receiver must fail closed.'
+              assert headers.get('Cache-Control') == 'no-store', 'Private API response must not be cached.'
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('## Live receiver checks passed\n\n')
+              summary.write('- HTTPS health check: `200`, `ok=true`, `maintenance=true`.\n')
+              summary.write('- Uninitialized account and group endpoints: `503`, `ready=false`.\n')
+              summary.write('- Pages CORS origin and private-response cache controls checked.\n')
+              summary.write('- No user accounts, sessions, records or photos were created or read.\n')
+              summary.write('- This does **not** verify login, cross-device persistence, member isolation or mainland access.\n')
+              summary.write('- The existing Pages backend was not changed.\n')
+          PY
