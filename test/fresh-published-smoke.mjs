@@ -11,6 +11,9 @@ async function json(url){const r=await fetch(url,{headers:{Origin:'https://zjwzk
 try{
  const release=await json(pageBase+'release.json');check('published-fresh-release',release.release==='fresh-v1'&&release.mode==='new-empty-app'&&release.legacyDataImported===false);
  const health=await json(api+'/healthz?forceFunctionRegion=ap-southeast-1');check('fresh-api-ready',health.ready===true&&health.mode==='new-empty-app');
+ check('personal-wishes-deployed',release.features?.includes('training-wishes-v1')&&health.features?.includes('training-wishes-v1'));
+ const wishes=await fetch(api+'/api/wishes?forceFunctionRegion=ap-southeast-1',{headers:{Origin:'https://zjwzkongqc.github.io'},redirect:'error',signal:AbortSignal.timeout(30000)});
+ check('personal-wishes-require-login',wishes.status===401&&wishes.headers.get('Cache-Control')==='no-store');
  const identity=await json(api+'/api/auth/me?forceFunctionRegion=ap-southeast-1');check('anonymous-has-no-private-identity',identity.account===null&&identity.clubs.length===0);
  browser=await chromium.launch({headless:true});
  const ctx=await browser.newContext({viewport:{width:390,height:844}}),page=await ctx.newPage(),errors=[],requests=[];
@@ -18,6 +21,7 @@ try{
  await page.goto(pageBase,{waitUntil:'domcontentloaded',timeout:45000});await page.locator('#create-form').waitFor({timeout:45000});
  check('actual-mobile-page-loaded',(await page.locator('.fresh-site-note').innerText()).includes('独立新小本本'));
  check('frontend-points-to-new-app',await page.evaluate(()=>window.TENNIS_CONFIG.apiPathPrefix==='/functions/v1/tennis-fresh'&&window.TENNIS_CONFIG.freshStart===true&&!window.TENNIS_CONFIG.credentialMigration));
+ check('personal-wishes-script-loaded',await page.evaluate(()=>typeof window.TennisWishes?.refresh==='function'));
  check('requests-use-database-region',requests.some(u=>u.includes('/tennis-fresh/')&&u.includes('forceFunctionRegion=ap-southeast-1')));
  check('no-old-site-requests',!requests.some(u=>u.includes('chatgpt.site')||u.includes('/functions/v1/tennis-api')));
  check('mobile-layout-fits',await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));

@@ -84,6 +84,8 @@ jobs:
           npm ci
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
+      - name: Verify personal wishes in an isolated browser and database
+        run: npm run test:wishes:browser
       - name: Read-only actual Pages and backend verification
         run: node test/fresh-published-smoke.mjs
       - name: Explicit one-time live login and saving acceptance

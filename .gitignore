@@ -14,4 +14,5 @@ private-migration/
 *.object
 /supabase/functions/tennis-api/worker.mjs
 /neon/functions/tennis-api/worker.mjs
+supabase/.temp/
 *.pk8

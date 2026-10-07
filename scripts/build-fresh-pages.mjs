@@ -28,14 +28,16 @@ export async function buildFreshPages(){
  let css=await fs.readFile(path.join(output,'style.css'),'utf8');
  css+='\n.fresh-site-note{position:relative;z-index:5;padding:10px 20px;text-align:center;background:#eaf2df;color:#25402d;font:500 12px/1.65 system-ui,sans-serif;border-bottom:1px solid #d5dfcc}.fresh-site-note strong{font-weight:750}.fresh-site-note span{display:inline-block;margin:0 6px}@media(max-width:600px){.fresh-site-note{padding:9px 14px;font-size:11px;text-align:left}}\n';
  await fs.writeFile(path.join(output,'style.css'),css);
+ for(const file of ['wishes.js','wishes.css'])await fs.copyFile(path.join(root,'src',file),path.join(output,file));
  let html=await fs.readFile(path.join(output,'index.html'),'utf8');
+ html=html.replace('</head>','  <link rel="stylesheet" href="./wishes.css">\n  <script src="./wishes.js" defer></script>\n</head>');
  html=html.replace('<body>','<body>\n  <div class="fresh-site-note" role="note"><strong>独立新小本本</strong><span>新记录从这里开始 · 旧站资料保持不变</span><span>每人独立身份，恢复码只自己保存</span></div>');
- for(const file of ['config.js','style.css','app.js','hexagon.js','growth.js','club-ui.js']){
+ for(const file of ['config.js','style.css','app.js','hexagon.js','growth.js','club-ui.js','wishes.js','wishes.css']){
   const version=createHash('sha256').update(await fs.readFile(path.join(output,file))).digest('hex').slice(0,12);
   html=html.replace(new RegExp('(\\./'+file.replace('.','\\.')+')(?:\\?v=[a-f0-9]+)?','g'),'$1?v='+version);
  }
  await fs.writeFile(path.join(output,'index.html'),html);
- await fs.writeFile(path.join(output,'release.json'),JSON.stringify({release:'fresh-v1',page:FRESH_PAGE,api:FRESH_ORIGIN+FRESH_PREFIX,mode:'new-empty-app',legacyDataImported:false,functionRegion:'ap-southeast-1'}));
+ await fs.writeFile(path.join(output,'release.json'),JSON.stringify({release:'fresh-v1',features:['training-wishes-v1'],page:FRESH_PAGE,api:FRESH_ORIGIN+FRESH_PREFIX,mode:'new-empty-app',legacyDataImported:false,functionRegion:'ap-southeast-1'}));
  console.log('Built independent fresh app at '+FRESH_PAGE);
  return output;
 }
