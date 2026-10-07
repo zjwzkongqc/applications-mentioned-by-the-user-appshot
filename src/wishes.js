@@ -50,17 +50,30 @@
   }
   function imageMarkup(wish, form = false) {
     const image = model.images.get(wish.id);
-    return wish.imageUrl ? `<img data-wish-image="${esc(wish.id)}"${image?.version === wish.updatedAt ? ` src="${esc(image.url)}"` : ''} alt="${esc(wish.name)}的心愿图片" ${form ? '' : 'loading="lazy"'}>` : placeholder();
+    const fallback = `<span class="wish-image-fallback"${wish.imageUrl ? ' role="status"' : ''}>${placeholder()}<span class="wish-image-caption">${wish.imageUrl ? '正在打开心愿图片…' : '下一份喜欢'}</span>${wish.imageUrl ? '' : '<small>每一次挥拍，都更近一点</small>'}</span>`;
+    return fallback + (wish.imageUrl ? `<img data-wish-image="${esc(wish.id)}"${image?.version === wish.updatedAt ? ` src="${esc(image.url)}"` : ''} alt="${esc(wish.name)}的心愿图片" decoding="async" ${form ? '' : 'loading="lazy"'}>` : '');
+  }
+  function imageState(img, state) {
+    img.dataset.imageState = state;
+    const fallback = img.parentElement?.querySelector('.wish-image-fallback');
+    if (!fallback) return;
+    fallback.hidden = state === 'ready';
+    const caption = fallback.querySelector('.wish-image-caption');
+    if (caption && state === 'failed') caption.textContent = '心愿图片暂未显示';
+  }
+  function imageFailed(id) {
+    for (const img of document.querySelectorAll('[data-wish-image]')) if (img.dataset.wishImage === id) imageState(img, 'failed');
   }
   function wishCard(wish) {
     const p = progress(model.data.totalValueCents, wish.targetCents), complete = !!wish.fulfilledAt;
     const percentage = p.percent >= 100 ? '100' : String(Math.floor(p.percent * 10) / 10);
     return `<article class="wish-card${complete ? ' is-fulfilled' : ''}" data-wish-card="${esc(wish.id)}">
-      <div class="wish-card-top"><div class="wish-visual">${imageMarkup(wish)}</div><div class="wish-card-title"><span class="wish-status">${complete ? '✓ 心愿已实现' : p.percent >= 100 ? '等值目标已达到' : '正在靠近喜欢的东西'}</span><h3>${esc(wish.name)}</h3><p class="wish-price">${money(wish.targetCents)}</p></div></div>
+      <div class="wish-cover"><div class="wish-cover-meta"><span>MY WISHLIST</span><span>我的心愿</span></div><div class="wish-visual">${imageMarkup(wish)}</div></div>
+      <div class="wish-card-body"><div class="wish-card-top"><div class="wish-card-title"><span class="wish-status">${complete ? '✓ 心愿已实现' : p.percent >= 100 ? '等值目标已达到' : '正在靠近喜欢的东西'}</span><h3>${esc(wish.name)}</h3></div><p class="wish-price"><span>心愿金额</span><strong>${money(wish.targetCents)}</strong></p></div>
       <div class="wish-progress-label"><span>训练等值进度</span><strong>${percentage}<small>%</small></strong></div><progress class="wish-progress" value="${p.percent}" max="100" aria-label="${esc(wish.name)}的训练等值进度">${percentage}%</progress>
       <p class="wish-remaining">${p.remainingCents ? `还差 <strong>${money(p.remainingCents)}</strong> · 约 ${duration(p.remainingMinutes)}` : '这份坚持，已经攒到心愿的等值目标。'}</p>
       ${complete ? `<p class="wish-fulfilled-date">${esc(wish.fulfilledAt.slice(0, 10))} · 由你标记实现</p>` : ''}
-      <div class="wish-card-actions">${button(complete ? 'reopen' : 'fulfill', complete ? '重新设为进行中' : '标记心愿已实现', wish.id, 'secondary')}${button('edit', '编辑', wish.id)}${button('delete', '删除', wish.id, 'text-button danger')}</div>
+      <div class="wish-card-actions">${button(complete ? 'reopen' : 'fulfill', complete ? '重新设为进行中' : '标记心愿已实现', wish.id, 'secondary')}${button('edit', '编辑', wish.id)}${button('delete', '删除', wish.id, 'text-button danger')}</div></div>
     </article>`;
   }
   function errorMarkup() {
@@ -71,7 +84,7 @@
     return `<div class="wish-section-heading"><div><p class="eyebrow">A LITTLE CLOSER, EVERY SESSION</p><h2>训练心愿</h2><p>把球场上的坚持，换算成离心愿更近的一步。</p></div>${button('create', '+ 添加心愿', '', 'primary')}</div>
       <div class="wish-value-card"><div class="wish-value-copy"><span class="wish-value-label">我的累计训练等值</span><strong class="wish-total">${data ? money(data.totalValueCents) : '—'}</strong><p>${data ? `已记录 ${duration(data.totalMinutes)}` : '正在读取你的长期训练记录…'}</p></div><div class="wish-rate"><span class="wish-tennis-ball" aria-hidden="true"></span><strong>1 小时 = ¥150</strong><small>每 1 分钟，都算数</small></div></div>
       <p class="wish-explainer">按 ¥150/小时折算，用来记录坚持与心愿进度，不代表实际到账。累计包含这个账号已保存的打球与训练时长（含归档记录）；签到本身不计时长。</p>${errorMarkup()}
-      ${data ? data.wishes.length ? `<div class="wish-grid">${data.wishes.map(wishCard).join('')}</div><p class="wish-footnote">心愿仅自己可见。每个心愿都参考同一份累计训练等值，标记实现不会扣减，也不会清空训练记录。</p>` : `<div class="wish-empty"><div class="wish-empty-art">${placeholder()}</div><div><h3>下一份喜欢，交给每一次挥拍。</h3><p>一支新球拍、一双球鞋，或一场旅行。<br>写下想要的东西和价格，看看坚持带你走了多远。</p>${button('create', '写下第一个心愿', '', 'secondary')}</div></div>` : !model.error ? '<p class="loading-line wish-loading" role="status">正在打开我的心愿…</p>' : ''}`;
+      ${data ? data.wishes.length ? `<div class="wish-grid">${data.wishes.map(wishCard).join('')}</div><p class="wish-footnote">心愿不在群动态公开；昵称、心愿名称和目标金额会汇总给群主制作图片。每个心愿都参考同一份累计训练等值，标记实现不会扣减，也不会清空训练记录。</p>` : `<div class="wish-empty"><div class="wish-empty-art">${placeholder()}</div><div><h3>下一份喜欢，交给每一次挥拍。</h3><p>一支新球拍、一双球鞋，或一场旅行。<br>写下想要的东西和价格，看看坚持带你走了多远。</p>${button('create', '写下第一个心愿', '', 'secondary')}</div></div>` : !model.error ? '<p class="loading-line wish-loading" role="status">正在打开我的心愿…</p>' : ''}`;
   }
   function teaserContent() {
     const d = model.data;
@@ -121,22 +134,22 @@
       const targets = [...document.querySelectorAll('[data-wish-image]')].filter(img => img.dataset.wishImage === wish.id);
       if (!targets.length || !wish.imageUrl) continue;
       const existing = model.images.get(wish.id);
-      if (existing?.version === wish.updatedAt) { targets.forEach(img => { if (img.src !== existing.url) img.src = existing.url; }); continue; }
+      if (existing?.version === wish.updatedAt) { targets.forEach(img => { if (img.src !== existing.url) img.src = existing.url; if (img.complete && img.naturalWidth > 0) imageState(img, 'ready'); }); continue; }
       if (model.imagePending.has(wish.id)) continue;
       // Accept only this account-scoped resource path, never arbitrary URLs.
-      if (wish.imageUrl !== '/api/wishes/' + wish.id + '/image') continue;
+      if (wish.imageUrl !== '/api/wishes/' + wish.id + '/image') { imageFailed(wish.id); continue; }
       const marker = {}; model.imagePending.set(wish.id, marker);
       (async () => {
         try {
           const response = await apiFetch(wish.imageUrl);
-          if (!response.ok) return;
+          if (!response.ok) { if (current()) imageFailed(wish.id); return; }
           const blob = await response.blob();
           if (!current() || model.data?.wishes.find(w => w.id === wish.id)?.updatedAt !== wish.updatedAt) return;
           const url = URL.createObjectURL(blob), old = model.images.get(wish.id);
           if (old) URL.revokeObjectURL(old.url);
           model.images.set(wish.id, { url, version: wish.updatedAt });
           for (const img of document.querySelectorAll('[data-wish-image]')) if (img.dataset.wishImage === wish.id) img.src = url;
-        } catch { /* The wish remains useful when its optional photo is offline. */ }
+        } catch { if (current()) imageFailed(wish.id); }
         finally { if (model.imagePending.get(wish.id) === marker) model.imagePending.delete(wish.id); }
       })();
     }
@@ -161,7 +174,7 @@
     if (id && !wish) { toast('心愿还没有加载出来，请刷新后再试。'); return; }
     const current = guard(), wishId = wish?.id || crypto.randomUUID();
     let saved = !!wish, imagePreview = null, selectedImage = null, imageTask = Promise.resolve(), fileGeneration = 0, busy = false;
-    modal(wish ? '编辑我的心愿' : '写下一个心愿', `<form id="wish-form" class="form"><p class="form-helper">只给自己看的小目标。训练记录会自动换算进度。</p><div><label for="wish-name">想要的东西</label><input id="wish-name" name="name" maxlength="60" value="${esc(wish?.name || '')}" placeholder="比如：一支喜欢的新球拍" required></div><div><label for="wish-price">心愿金额 <span class="optional">元</span></label><input id="wish-price" name="price" type="text" inputmode="decimal" maxlength="12" value="${wish ? (wish.targetCents / 100).toFixed(2) : ''}" placeholder="例如 3000" required><p class="form-helper" id="wish-price-preview">按 ¥150/小时，看看离喜欢的东西还有多远。</p></div><div><label for="wish-image">心愿图片 <span class="optional">选填</span></label><div class="wish-upload-preview" id="wish-image-preview">${wish ? imageMarkup(wish, true) : placeholder()}</div><input type="file" id="wish-image" accept="image/jpeg,image/png,image/webp"><p class="form-helper">选一张代表心愿的图片，会自动压缩后保存。图片仅自己可见。</p></div>${actionButtons('保存心愿')}</form>`, 'SOMETHING TO LOOK FORWARD TO');
+    modal(wish ? '编辑我的心愿' : '写下一个心愿', `<form id="wish-form" class="form"><p class="form-helper">记录自己的小目标。昵称、心愿名称和金额会汇总给群主制作图片。</p><div><label for="wish-name">想要的东西</label><input id="wish-name" name="name" maxlength="60" value="${esc(wish?.name || '')}" placeholder="比如：一支喜欢的新球拍" required></div><div><label for="wish-price">心愿金额 <span class="optional">元</span></label><input id="wish-price" name="price" type="text" inputmode="decimal" maxlength="12" value="${wish ? (wish.targetCents / 100).toFixed(2) : ''}" placeholder="例如 3000" required><p class="form-helper" id="wish-price-preview">按 ¥150/小时，看看离喜欢的东西还有多远。</p></div><div><label for="wish-image">心愿图片 <span class="optional">选填</span></label><div class="wish-upload-preview" id="wish-image-preview">${wish ? imageMarkup(wish, true) : placeholder()}</div><input type="file" id="wish-image" accept="image/jpeg,image/png,image/webp"><p class="form-helper">选一张代表心愿的图片，会自动压缩后保存，展示在你的心愿页。</p></div>${actionButtons('保存心愿')}</form>`, 'SOMETHING TO LOOK FORWARD TO');
     const form = document.querySelector('#wish-form'), price = form.elements.price, error = form.querySelector('.form-error');
     const dispose = () => { fileGeneration++; if (imagePreview) URL.revokeObjectURL(imagePreview); dialog.removeEventListener('close', dispose); };
     dialog.addEventListener('close', dispose, { once: true });
@@ -254,6 +267,12 @@
     return result;
   };
   openRecord = function (...args) { const result = base.openRecord.apply(this, args); trainingPreview(); return result; };
+  document.addEventListener('load', event => {
+    if (event.target instanceof HTMLImageElement && event.target.matches('[data-wish-image]')) imageState(event.target, 'ready');
+  }, true);
+  document.addEventListener('error', event => {
+    if (event.target instanceof HTMLImageElement && event.target.matches('[data-wish-image]')) imageState(event.target, 'failed');
+  }, true);
   document.addEventListener('click', event => {
     const target = event.target.closest('[data-wish-action]');
     if (!target || target.disabled || !syncIdentity()) return;
