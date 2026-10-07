@@ -29,11 +29,13 @@ export async function buildFreshPages(){
  let css=await fs.readFile(path.join(output,'style.css'),'utf8');
  css+='\n.fresh-site-note{position:relative;z-index:5;padding:10px 20px;text-align:center;background:#eaf2df;color:#25402d;font:500 12px/1.65 system-ui,sans-serif;border-bottom:1px solid #d5dfcc}.fresh-site-note strong{font-weight:750}.fresh-site-note span{display:inline-block;margin:0 6px}@media(max-width:600px){.fresh-site-note{padding:9px 14px;font-size:11px;text-align:left}}\n';
  await fs.writeFile(path.join(output,'style.css'),css);
- for(const file of ['notebook.js','notebook.css','wishes.js','wishes.css'])await fs.copyFile(path.join(root,'src',file),path.join(output,file));
+ for(const file of ['notebook.js','notebook.css','wishes.js','wishes.css','apple-theme.css'])await fs.copyFile(path.join(root,'src',file),path.join(output,file));
+ await fs.writeFile(path.join(output,'favicon.svg'),'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect width="40" height="40" rx="12" fill="#0071e3"/><circle cx="20" cy="20" r="12" fill="#fff"/><path d="M12 10c10 5 10 15 0 20M28 10c-10 5-10 15 0 20" fill="none" stroke="#0071e3" stroke-width="2"/></svg>\n');
  let html=await fs.readFile(path.join(output,'index.html'),'utf8');
- html=html.replace('</head>','  <link rel="stylesheet" href="./notebook.css">\n  <script src="./notebook.js" defer></script>\n  <link rel="stylesheet" href="./wishes.css">\n  <script src="./wishes.js" defer></script>\n</head>');
+ html=html.replace('</head>','  <link rel="stylesheet" href="./notebook.css">\n  <script src="./notebook.js" defer></script>\n  <link rel="stylesheet" href="./wishes.css">\n  <script src="./wishes.js" defer></script>\n  <link rel="stylesheet" href="./apple-theme.css">\n</head>');
+ html=html.replace('<meta name="theme-color" content="#143d2e">','<meta name="theme-color" content="#f5f5f7">');
  html=html.replace('<body>','<body>\n  <div class="fresh-site-note" role="note"><strong>我们的网球记录本</strong><span>每一场球，都算数。</span><span>每人独立名片，恢复码只自己保存</span></div>');
- for(const file of ['config.js','style.css','app.js','hexagon.js','growth.js','club-ui.js','notebook.js','notebook.css','wishes.js','wishes.css']){
+ for(const file of ['config.js','style.css','app.js','hexagon.js','growth.js','club-ui.js','notebook.js','notebook.css','wishes.js','wishes.css','apple-theme.css','favicon.svg']){
   const version=createHash('sha256').update(await fs.readFile(path.join(output,file))).digest('hex').slice(0,12);
   html=html.replace(new RegExp('(\\./'+file.replace('.','\\.')+')(?:\\?v=[a-f0-9]+)?','g'),'$1?v='+version);
  }

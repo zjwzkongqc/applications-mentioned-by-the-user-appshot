@@ -1,0 +1,331 @@
+/*
+ * Fresh app only. Color reference: Apple China home page, inspected 2026-10-07.
+ * https://www.apple.com.cn/v/homepage/a/styles/main.built.css
+ * https://www.apple.com.cn/v/homepage/a/styles/homepage.built.css
+ * White, light gray, near-black and blue are color inspiration only;
+ * this independent tennis notebook is not affiliated with Apple.
+ * Load after style.css, notebook.css and wishes.css. No remote styles or fonts.
+ */
+:root {
+  color-scheme: light;
+  --apple-white: #fff;
+  --apple-surface: #f5f5f7;
+  --apple-text: #1d1d1f;
+  --apple-muted: #6e6e73;
+  --apple-border: #d2d2d7;
+  --apple-blue: #0071e3;
+  --apple-link: #0066cc;
+  --apple-focus: #0077ed;
+  --apple-blue-wash: #0071e30d;
+  --apple-blue-selected: #0071e31a;
+  --green: var(--apple-blue);
+  --deep: var(--apple-text);
+  --lime: var(--apple-blue-selected);
+  --paper: var(--apple-surface);
+  --ink: var(--apple-text);
+  --muted: var(--apple-muted);
+  --line: var(--apple-border);
+  --white: var(--apple-white);
+  accent-color: var(--apple-blue);
+  background: var(--paper);
+  color: var(--ink);
+}
+
+/* Quiet surfaces let each member's photos and training take the foreground. */
+.sidebar {
+  background: var(--white);
+  color: var(--ink);
+  border-right: 1px solid var(--line);
+}
+.brand-icon,
+.empty-mark,
+.club-list-ball {
+  background: var(--apple-surface);
+}
+.brand small,
+.welcome .brand small {
+  color: var(--muted);
+  opacity: 1;
+}
+.nav-item { color: var(--muted); }
+.nav-item.active {
+  background: var(--apple-blue-wash);
+  color: var(--apple-link);
+}
+.side-note { color: var(--muted); border-color: var(--line); }
+.side-note strong { color: var(--ink); }
+.sidebar .small-button {
+  background: var(--white);
+  border-color: var(--line);
+  color: var(--apple-link);
+}
+.fresh-site-note {
+  background: var(--white);
+  color: var(--muted);
+  border-color: var(--line);
+}
+.fresh-site-note strong { color: var(--ink); }
+.welcome-copy h1 em {
+  background: transparent;
+  color: var(--apple-link);
+  box-shadow: none;
+}
+.welcome-note > span { border-color: var(--line); color: var(--muted); }
+
+/* Keep small white button labels readable, including hover. */
+.primary,
+.primary.lime {
+  background: var(--apple-blue);
+  color: var(--white);
+  border-radius: 999px;
+}
+.secondary,
+.small-button {
+  background: var(--white);
+  border-color: var(--line);
+  color: var(--apple-link);
+  border-radius: 999px;
+}
+.text-button { color: var(--apple-link); }
+.text-button.danger,
+.danger { color: var(--red); }
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline-color: var(--apple-focus);
+}
+@media (hover: hover) {
+  .primary:not(:disabled):hover { background: var(--apple-link); }
+  .secondary:not(:disabled):hover,
+  .small-button:not(:disabled):hover,
+  .sidebar .small-button:not(:disabled):hover {
+    background: var(--apple-surface);
+    border-color: var(--apple-blue);
+  }
+  .nav-item:not(.active):hover { background: var(--apple-surface); color: var(--ink); }
+  .text-button:not(:disabled):hover { text-decoration: underline; text-underline-offset: 3px; }
+}
+
+.stats,
+.record,
+.mini-card,
+.member-card,
+.growth-stats,
+.growth-card,
+.create-card,
+.notebook-access,
+.wish-card {
+  background: var(--white);
+  border-color: var(--line);
+  box-shadow: 0 4px 20px #00000004;
+}
+.record,
+.mini-card,
+.member-card,
+.growth-card,
+.create-card,
+.notebook-access,
+.wish-card { border-radius: 20px; }
+.record-bottom { border-color: var(--line); }
+.avatar,
+.avatar[data-tone="1"],
+.avatar[data-tone="2"],
+.avatar[data-tone="3"] {
+  background: var(--apple-surface);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.avatar[data-tone="2"] { background: var(--apple-blue-wash); color: var(--apple-link); }
+.tag,
+.tag.mood,
+.badge,
+.cheer {
+  background: var(--apple-surface);
+  color: var(--ink);
+}
+.cheer.chosen { background: var(--apple-blue-wash); border-color: var(--apple-blue); color: var(--apple-link); }
+.photo-open { background: var(--apple-surface); }
+.empty,
+.wish-empty { background: var(--white); border-color: var(--line); }
+.club-card,
+.my-card,
+.checkin-bar {
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  box-shadow: 0 4px 20px #00000004;
+  border-radius: 20px;
+}
+.club-card .eyebrow,
+.club-card p,
+.my-card .identity small,
+.checkin-bar .eyebrow,
+.checkin-bar p:not(.eyebrow) { color: var(--muted); }
+.my-card .secondary,
+.checkin-actions .secondary {
+  color: var(--apple-link);
+  background: var(--apple-blue-wash);
+  border-color: var(--line);
+}
+.checkin-actions .text-button { color: var(--apple-link); }
+.join-banner,
+.account-panel,
+.home-login-note,
+.invite-account-note,
+.pending-claims .club-list-item,
+.next-training-plan,
+.hex-summary {
+  background: var(--white);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.join-banner p,
+.next-training-plan .eyebrow,
+.hex-summary-copy .eyebrow,
+.hex-sample { color: var(--muted); }
+.club-list-item:hover { background: var(--apple-surface); border-color: var(--apple-blue); }
+.club-list-go { color: var(--apple-link); }
+.culture-card,
+.culture-card:nth-child(3n+2),
+.culture-card:nth-child(3n) {
+  background: var(--white);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+/* Hexagon scores and growth charts share the same restrained blue accent. */
+.hex-token { background: var(--apple-blue-selected); color: var(--apple-link); }
+.hex-total { background: var(--apple-surface); }
+.hex-total > span { color: var(--muted); }
+.hex-total strong { color: var(--ink); }
+.hex-badge .hex-token { background: var(--apple-surface); color: var(--muted); }
+.hex-badge.earned { color: var(--apple-link); }
+.hex-badge.earned .hex-token { background: var(--apple-blue-selected); color: var(--apple-link); }
+.hex-grid,
+.hex-grid:last-of-type,
+.hex-axis,
+.hex-radar.unrated .hex-grid,
+.trend-grid { stroke: var(--line); }
+.hex-area { fill: var(--apple-blue-selected); stroke: var(--apple-blue); }
+.hex-point { fill: var(--apple-blue); stroke: var(--white); }
+.hex-partial { stroke: var(--apple-blue); }
+.hex-record { background: var(--apple-surface); border-color: var(--line); }
+.hex-record small,
+.hex-scale,
+.hex-preview-caption { color: var(--muted); }
+.hex-record-hint { color: var(--apple-link); }
+.rating-changes > span { background: var(--apple-surface); }
+.calendar-day.checked { background: var(--apple-blue-selected); color: var(--apple-link); }
+.calendar-day.today { outline-color: var(--apple-blue); }
+.calendar-day.trained i,
+.trained-legend { background: var(--apple-blue); }
+.checked-legend { background: var(--apple-blue-selected); border: 1px solid var(--apple-blue); }
+.growth-trend path { stroke: var(--apple-blue); }
+.growth-trend circle { fill: var(--apple-blue); stroke: var(--white); }
+.growth-data summary { color: var(--apple-link); }
+
+/* Forms, recovery and dialogs keep their existing workflows and semantics. */
+dialog { background: var(--white); box-shadow: 0 20px 90px #00000030; }
+dialog::backdrop { background: #00000066; }
+.form input,
+.form textarea,
+.form select,
+.rating-select select,
+.share-url { border-color: var(--line); background: var(--white); color: var(--ink); }
+.form input[type="file"]::file-selector-button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--apple-surface);
+  color: var(--apple-link);
+  padding: 6px 12px;
+  margin-right: 10px;
+  font: inherit;
+}
+.mood-options label:has(input:checked) {
+  background: var(--apple-blue-wash);
+  border-color: var(--apple-blue);
+  color: var(--apple-link);
+}
+.profile-help,
+.hex-form,
+.training-form,
+.training-details,
+.recovery-code {
+  background: var(--apple-surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+.hex-scale,
+.last-plan { border-color: var(--line); }
+.hex-score-options span,
+.training-projects span { border-color: var(--line); background: var(--white); color: var(--ink); }
+.hex-score-options label:has(input:checked) span,
+.training-projects label:has(input:checked) span {
+  background: var(--apple-blue);
+  border-color: var(--apple-blue);
+  color: var(--white);
+}
+.hex-score-options label:has(input:focus-visible) span,
+.training-projects label:has(input:focus-visible) span { outline-color: var(--apple-focus); }
+.last-plan p { color: var(--muted); }
+.last-plan .text-button { color: var(--apple-link); }
+.training-tags span { background: var(--white); color: var(--ink); }
+.training-tags .effect-tag.pending { background: var(--white); color: var(--muted); }
+#toast { background: var(--ink); color: var(--white); box-shadow: 0 5px 20px #00000026; }
+
+/* Personal wishes: large clean photo covers, neutral amounts, blue progress. */
+.wish-value-card {
+  background: var(--white);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+}
+.wish-value-label,
+.wish-value-copy p,
+.wish-rate small { color: var(--muted); }
+.wish-total { color: var(--ink); }
+.wish-rate strong { color: var(--apple-link); }
+.wish-tennis-ball { background: var(--apple-surface); border: 1px solid var(--line); }
+.wish-tennis-ball::before,
+.wish-tennis-ball::after { border-color: var(--apple-muted); opacity: .7; }
+.wish-card.is-fulfilled { background: var(--white); }
+.wish-cover {
+  background: var(--apple-surface);
+  border-color: var(--line);
+}
+.wish-cover::before,
+.wish-cover::after { border-color: #1d1d1f08; }
+.wish-cover-meta,
+.wish-image-fallback small { color: var(--muted); }
+.wish-visual,
+.wish-empty-art,
+.wish-upload-preview { color: var(--apple-link); }
+.wish-image-fallback svg { border-color: var(--line); background: var(--white); }
+.wish-status,
+.is-fulfilled .wish-status { color: var(--apple-link); }
+.wish-progress { background: var(--apple-surface); }
+.wish-progress::-webkit-progress-bar { background: var(--apple-surface); }
+.wish-progress::-webkit-progress-value { background: var(--apple-blue); }
+.wish-progress::-moz-progress-bar { background: var(--apple-blue); }
+.wish-teaser { background: var(--white); border-color: var(--line); }
+.wish-teaser .secondary { background: var(--white); }
+.wish-upload-preview,
+.wish-record-value { background: var(--apple-surface); border-color: var(--line); }
+.wish-record-value span { color: var(--muted); }
+.wish-record-value strong { color: var(--ink); }
+
+@media (max-width: 640px) {
+  .mobile-nav {
+    background: #fffffff2;
+    border-color: var(--line);
+    box-shadow: 0 -2px 14px #00000004;
+  }
+  .mobile-nav .nav-item { color: var(--muted); }
+  .mobile-nav .nav-item.active { color: var(--apple-link); }
+  .mobile-nav .nav-item.active svg {
+    background: transparent;
+    box-shadow: none;
+  }
+}
