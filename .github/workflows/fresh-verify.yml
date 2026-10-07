@@ -39,15 +39,18 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.0
           npx playwright install --with-deps chromium
-      - name: Live HTTPS and mobile browser verification
-        run: node test/fresh-live-browser.mjs
+      - name: Local account flows and read-only published verification
+        run: |
+          npm run test:wishes:browser
+          npm run test:notebook:browser
+          node test/fresh-published-smoke.mjs
       - name: Save non-secret verification results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: fresh-site-verification
           path: |
-            fresh-live-report.json
+            fresh-smoke-report.json
             fresh-welcome.png
           if-no-files-found: ignore
           retention-days: 7

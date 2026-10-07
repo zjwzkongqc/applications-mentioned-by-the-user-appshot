@@ -91,7 +91,7 @@ try {
         const rel = url.pathname.slice(new URL(pageBase).pathname.length) || 'index.html';
         assert(/^[a-zA-Z0-9_.-]+$/.test(rel), 'unexpected Pages path');
         const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.svg': 'image/svg+xml', '.json': 'application/json' };
-        await route.fulfill({ status: 200, contentType: types[path.extname(rel)] || 'text/plain', body: await fs.readFile(new URL('../dist/pages/fresh/' + rel, import.meta.url)) });
+        await route.fulfill({ status: 200, contentType: types[path.extname(rel)] || 'text/plain', body: rel === 'config.js' ? (await fs.readFile(new URL('../dist/pages/fresh/config.js', import.meta.url), 'utf8')).replace('d8c317bf-c2c5-4847-ad6d-9dd062367a45', club.clubId) : await fs.readFile(new URL('../dist/pages/fresh/' + rel, import.meta.url)) });
         return;
       }
       assert.equal(url.origin, apiOrigin, 'test cannot contact external services');

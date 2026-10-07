@@ -20,7 +20,7 @@ async function call(name,route,{method='GET',user,invite,data,bytes,status=200}=
 }
 const skill={forehand:0,backhand:null,serve:5,return_skill:5,net:5,footwork:5};
 try{
- const health=await call('fresh-backend-ready','/healthz');await step('explicit-new-app-not-fake-migration',health.ready===true&&health.mode==='new-empty-app'&&health.legacyDataImported===false);
+ const health=await call('fresh-backend-ready','/healthz');if(health.features?.includes('single-notebook-v1'))throw new Error('Live fixture creation is disabled for the single notebook. Run the isolated notebook and wishes browser tests instead.');await step('explicit-new-app-not-fake-migration',health.ready===true&&health.mode==='new-empty-app'&&health.legacyDataImported===false);
  const old=await fetch(origin+'/functions/v1/tennis-api/healthz',{signal:AbortSignal.timeout(45000)});await step('old-migration-receiver-still-closed',(await old.json()).maintenance===true);
  const users=[];
  for(let i=0;i<3;i++){const u=await call('create-test-account-'+i,'/api/auth/start',{method:'POST',data:{nickname:report.fixtureName.slice(0,15)+i,startNonce:crypto.randomBytes(32).toString('hex')},status:201});users.push(u);report.fixtureAccounts.push(u.account.id);}

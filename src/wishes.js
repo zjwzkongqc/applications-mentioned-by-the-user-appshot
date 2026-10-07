@@ -70,7 +70,7 @@
     const data = model.data;
     return `<div class="wish-section-heading"><div><p class="eyebrow">A LITTLE CLOSER, EVERY SESSION</p><h2>训练心愿</h2><p>把球场上的坚持，换算成离心愿更近的一步。</p></div>${button('create', '+ 添加心愿', '', 'primary')}</div>
       <div class="wish-value-card"><div class="wish-value-copy"><span class="wish-value-label">我的累计训练等值</span><strong class="wish-total">${data ? money(data.totalValueCents) : '—'}</strong><p>${data ? `已记录 ${duration(data.totalMinutes)}` : '正在读取你的长期训练记录…'}</p></div><div class="wish-rate"><span class="wish-tennis-ball" aria-hidden="true"></span><strong>1 小时 = ¥150</strong><small>每 1 分钟，都算数</small></div></div>
-      <p class="wish-explainer">按 ¥150/小时折算，用来记录坚持与心愿进度，不代表实际到账。累计包含这个账号在各群记录的打球与训练时长；签到本身不计时长。</p>${errorMarkup()}
+      <p class="wish-explainer">按 ¥150/小时折算，用来记录坚持与心愿进度，不代表实际到账。累计包含这个账号已保存的打球与训练时长（含归档记录）；签到本身不计时长。</p>${errorMarkup()}
       ${data ? data.wishes.length ? `<div class="wish-grid">${data.wishes.map(wishCard).join('')}</div><p class="wish-footnote">心愿仅自己可见。每个心愿都参考同一份累计训练等值，标记实现不会扣减，也不会清空训练记录。</p>` : `<div class="wish-empty"><div class="wish-empty-art">${placeholder()}</div><div><h3>下一份喜欢，交给每一次挥拍。</h3><p>一支新球拍、一双球鞋，或一场旅行。<br>写下想要的东西和价格，看看坚持带你走了多远。</p>${button('create', '写下第一个心愿', '', 'secondary')}</div></div>` : !model.error ? '<p class="loading-line wish-loading" role="status">正在打开我的心愿…</p>' : ''}`;
   }
   function teaserContent() {

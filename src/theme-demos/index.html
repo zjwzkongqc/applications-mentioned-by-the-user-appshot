@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="forest">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#F5F6F1">
+  <title>网球记录本 · 五种配色预览</title>
+  <link rel="stylesheet" href="./themes.css">
+  <script src="./themes.js" defer></script>
+</head>
+<body>
+  <header class="preview-bar">
+    <div class="preview-top"><div><span class="preview-label">COLOR STUDY / 01—05</span><h1>选一个，每天都想打开的颜色。</h1></div><a class="back-link" href="../">返回记录本 <span aria-hidden="true">↗</span></a></div>
+    <div class="theme-picker" role="tablist" aria-label="配色方案">
+      <button type="button" role="tab" id="tab-forest" data-theme-option="forest" data-theme-choice="forest" aria-selected="true" aria-controls="theme-preview"><span class="theme-dot forest-dot" aria-hidden="true"></span><span>奶油森林<small>当前配色</small></span></button>
+      <button type="button" role="tab" id="tab-gold" data-theme-option="gold" data-theme-choice="gold" aria-selected="false" aria-controls="theme-preview" tabindex="-1"><span class="theme-dot gold-dot" aria-hidden="true"></span><span>曜石香槟<small>黑金会员卡灵感</small></span></button>
+      <button type="button" role="tab" id="tab-clay" data-theme-option="clay" data-theme-choice="clay" aria-selected="false" aria-controls="theme-preview" tabindex="-1"><span class="theme-dot clay-dot" aria-hidden="true"></span><span>暖白红土<small>温暖 · 复古</small></span></button>
+      <button type="button" role="tab" id="tab-navy" data-theme-option="navy" data-theme-choice="navy" aria-selected="false" aria-controls="theme-preview" tabindex="-1"><span class="theme-dot navy-dot" aria-hidden="true"></span><span>雾白海军蓝<small>清晰 · 克制</small></span></button>
+      <button type="button" role="tab" id="tab-sage" data-theme-option="sage" data-theme-choice="sage" aria-selected="false" aria-controls="theme-preview" tabindex="-1"><span class="theme-dot sage-dot" aria-hidden="true"></span><span>象牙鼠尾草<small>柔和 · 耐看</small></span></button>
+    </div>
+    <div class="preview-meta"><p><span class="demo-dot" aria-hidden="true"></span>配色预览 · 示例数据<span class="meta-extra"> · 不改变你的正式记录本</span></p><button type="button" id="copy-link">复制此配色链接</button></div>
+  </header>
+
+  <main id="theme-preview" role="tabpanel" aria-labelledby="tab-forest" tabindex="0">
+    <aside class="sidebar">
+      <a class="brand" href="../"><span class="brand-ball" aria-hidden="true">◉</span><span><strong>网球记录本</strong><small>TENNIS JOURNAL</small></span></a>
+      <nav class="side-nav" aria-label="示例页面"><button type="button" class="active" data-view="records"><span aria-hidden="true">▤</span>训练记录</button><button type="button" data-view="growth"><span aria-hidden="true">◇</span>成长档案</button></nav>
+      <div class="side-motto"><span>GOOD TENNIS.<br>BETTER DAYS.</span><p>以球会友，<br>挥拍见更好的自己。</p><svg viewBox="0 0 180 105" aria-hidden="true"><path d="M19 86 61 16h75l30 70ZM40 51h111M51 33h92M93 16 92 86M58 20 32 86M137 20l21 66M33 66h126" fill="none" stroke="currentColor" stroke-width="1"/><path d="M28 55h128" stroke="currentColor" stroke-width="2"/></svg></div>
+      <div class="side-identity"><span class="avatar">C</span><div><strong>CHRIS</strong><small>每次上场，都有收获</small></div></div>
+    </aside>
+
+    <div class="notebook">
+      <div class="app-top"><span class="mobile-brand">网球记录本</span><span class="date">10 月 7 日 · 今天也适合打球</span><span class="app-top-note">LET'S PLAY.</span><span class="avatar mobile-avatar">C</span></div>
+      <section class="page-heading"><div><p class="eyebrow" id="view-eyebrow">OUR TENNIS JOURNAL</p><h2 id="view-title">教练，我想打网球</h2><p class="subtext" id="view-subtitle">一起打过的球，都值得记下来。</p></div><button type="button" class="primary" id="open-record"><span aria-hidden="true">＋</span>记录今天的训练</button></section>
+
+      <div class="records-view" data-page="records">
+        <section class="stats" aria-label="示例训练统计"><div><span>本月训练</span><strong>10<small>小时</small></strong></div><div><span>一起挥拍</span><strong>8<small>次</small></strong></div><div><span>连续签到</span><strong>5<small>天</small></strong></div></section>
+        <div class="layout">
+          <div class="feed-column"><div class="section-heading"><h3>球场上的小事</h3><span>最近的训练</span></div>
+            <article class="record"><div class="record-header"><div class="identity"><span class="avatar">C</span><div><strong>CHRIS</strong><small>与 MIA 一起训练</small></div></div><time>今天 18:30</time></div><div class="tags"><span>正手稳定性</span><span>移动与回位</span><span class="time-tag">60 分钟</span></div><p class="record-note">今天终于打出了连续 20 拍的正手！<br>慢一点准备，脚步跟上，球就听话多了。</p><div class="training-note"><span>下次练什么</span><p>继续练交叉步回位，把节奏保持住。</p></div><footer class="record-footer"><span class="cheer">🎾 3 <span>👏 2</span></span><span>一次训练，一点进步</span></footer></article>
+            <article class="record second-record"><div class="record-header"><div class="identity"><span class="avatar avatar-alt">M</span><div><strong>MIA</strong><small>发球专项 · 有一点突破</small></div></div><time>昨天 19:00</time></div><div class="tags"><span>发球控制</span><span class="time-tag">90 分钟</span></div><p class="record-note">把抛球的位置固定下来之后，进球率真的变高了。下次试着加一点旋转。</p><footer class="record-footer"><span class="cheer">👏 4</span><span>慢慢来，比较快</span></footer></article>
+            <section class="quote-card"><p>“在美丽的风景里，打更好的球。”</p><span>SAME PASSION. BETTER DAYS.</span></section>
+          </div>
+          <div class="aside-column"><section class="wish-card"><div class="section-heading"><h3>我的训练心愿</h3><span class="pill">仅自己可见</span></div><span class="metric-label">累计训练等值</span><strong class="wish-total"><small>¥</small>1,500</strong><p class="wish-formula">训练 10 小时 · 每小时 ¥150</p><div class="wish-item"><span class="racket-illustration"><svg viewBox="0 0 110 130" aria-hidden="true"><g transform="rotate(25 55 65)" fill="none" stroke="currentColor"><ellipse cx="55" cy="40" rx="27" ry="34" stroke-width="4"/><ellipse cx="55" cy="40" rx="22" ry="29" stroke-width="1.2"/><path d="M38 21v38m8-46v54m9-56v58m9-56v54m8-45v38M35 22h40M33 31h44M33 40h44M34 49h42M37 58h36" stroke-width=".7" opacity=".5"/><path d="m41 70 9 26h10l9-26M50 96v27h10V96" stroke-width="3"/><path d="m50 99 10 5m-10 2 10 5m-10 2 10 5" stroke-width="1.1"/></g></svg></span><div><span class="eyebrow">正在靠近</span><h4>一支喜欢的球拍</h4><p>目标 ¥3,000</p></div></div><div class="progress-label"><strong>已完成 50%</strong><span>¥1,500 / ¥3,000</span></div><div class="progress" role="progressbar" aria-label="示例心愿进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="50"><i></i></div><p class="remaining">再训练 <b>10 小时</b>，就达到目标啦。</p><p class="wish-note">训练等值用于自我激励</p></section>
+            <section class="radar-card"><div class="section-heading"><h3>六边形成长</h3><span>本月自评</span></div><div class="radar-container"></div><p>不必每项都完美，进步有自己的形状。</p></section>
+          </div>
+        </div>
+      </div>
+
+      <div class="growth-view" data-page="growth" hidden><section class="growth-banner"><div><span class="eyebrow">ONE COURT. A BETTER YOU.</span><h3>练过的每一小时，都算数。</h3><p>这个月，已经为热爱投入了 10 小时。</p></div><span class="growth-stamp">10<small>HOURS</small></span></section><div class="growth-layout"><section class="radar-card"><div class="section-heading"><h3>我的能力六边形</h3><span>10 月 · 示例自评</span></div><div class="radar-container"></div><p>正手和步伐更稳定了，接下来专注发球控制。</p></section><section class="growth-summary"><div class="section-heading"><h3>每一小步，都被记住</h3></div><div class="timeline"><div><i></i><span>10 月 7 日</span><h4>连续 20 拍正手，达成！</h4><p>训练 60 分钟，完成正手与步伐练习。</p></div><div><i></i><span>10 月 5 日</span><h4>先找到节奏，再追求力量</h4><p>训练 90 分钟，开始稳定落点。</p></div><div><i></i><span>10 月 3 日</span><h4>这个月，从挥出第一拍开始</h4><p>给自己定下了 20 小时的训练目标。</p></div></div><div class="growth-goal"><span>本月训练目标</span><strong>10 / 20 <small>小时</small></strong><div class="progress"><i></i></div><p>已经走到一半，继续享受上场的感觉。</p></div></section></div></div>
+
+      <footer class="notebook-footer"><span>TENNIS BRINGS US TOGETHER.</span><span id="theme-description">奶油森林 · 清爽、有活力</span></footer>
+    </div>
+    <nav class="mobile-nav" aria-label="示例页面"><button type="button" class="active" data-view="records"><span aria-hidden="true">▤</span>训练记录</button><button type="button" data-view="growth"><span aria-hidden="true">◇</span>成长档案</button></nav>
+  </main>
+
+  <dialog id="demo-dialog"><div class="dialog-heading"><div><span class="eyebrow">配色预览 · 不会保存</span><h2>记录今天的训练</h2></div><button type="button" id="close-dialog" class="close-button" aria-label="关闭">×</button></div><form id="demo-form"><label>训练日期<input type="date" value="2026-10-07"></label><label>训练时长（分钟）<input type="number" value="60" min="1"></label><label>今天训练了什么<select><option>正手稳定性</option><option>反手稳定性</option><option>发球控制</option><option>接发球能力</option><option>网前截击</option><option>移动与回位</option></select></label><label>训练感想<textarea rows="3">脚步跟上，球就听话多了。</textarea></label><p>此处用于预览表单配色，不会新增或修改训练记录。</p><button type="submit" class="primary">完成预览</button></form></dialog>
+  <div id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

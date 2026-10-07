@@ -2,6 +2,8 @@
 // no fake receipt, no original data access, and no frontend/platform secrets.
 import postgres from 'npm:postgres@3.4.7';
 import {handleWishes} from './wishes.mjs';
+import {createNotebookPolicy} from './notebook.mjs';
+import {FRESH_FEATURES} from './settings.mjs';
 import worker from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/src/worker.js';
 import {createPostgresDatabase,postgresOptions} from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/supabase/functions/tennis-api/postgres.mjs';
 import {createSupabaseBucket} from 'https://raw.githubusercontent.com/zjwzkongqc/applications-mentioned-by-the-user-appshot/ffbdc4b892be0da9d0674e77b00f524b5dfcd18b/supabase/functions/tennis-api/storage.mjs';
@@ -10,6 +12,7 @@ const PAGES='https://zjwzkongqc.github.io';
 const PAGE='https://zjwzkongqc.github.io/applications-mentioned-by-the-user-appshot/fresh/';
 const PREFIX='/functions/v1/tennis-fresh';
 const RELEASE='fresh-v1';
+const notebookPolicy=createNotebookPolicy();
 if(Deno.env.get('SUPABASE_URL')!==ORIGIN)throw new Error('Project mismatch.');
 const ca=Deno.env.get('TENNIS_DB_CA_PEM');
 if(ca&&(!ca.includes('-----BEGIN CERTIFICATE-----')||ca.length>20000))throw new Error('Invalid database CA.');
@@ -39,7 +42,7 @@ Deno.serve(async request=>{
    if(!['GET','HEAD'].includes(request.method))return json(request,{error:'请求方式无效。'},405);
    const state=await connection.unsafe("SELECT mode,enabled FROM app_state WHERE id='fresh-v1'");
    const ready=state[0]?.mode==='new-empty-app'&&state[0]?.enabled===true;
-   return json(request,{ok:ready,ready,mode:'new-empty-app',release:RELEASE,features:['training-wishes-v1'],legacyDataImported:false},ready?200:503);
+   return json(request,{ok:ready,ready,mode:'new-empty-app',release:RELEASE,features:FRESH_FEATURES,legacyDataImported:false},ready?200:503);
   }
   const state=await connection.unsafe("SELECT enabled FROM app_state WHERE id='fresh-v1' AND mode='new-empty-app'");
   if(state[0]?.enabled!==true)return json(request,{ready:false,error:'新站暂未开放。'},503);
@@ -54,7 +57,8 @@ Deno.serve(async request=>{
   headers.set('CF-Connecting-IP','tennis-fresh-shared');
   if(bytes)headers.set('Content-Length',String(bytes.byteLength));
   const normalized=new Request(ORIGIN+path+url.search,{method:request.method,headers,body:bytes});
-  const response=await handleWishes(normalized,{DB,BUCKET})??await worker.fetch(normalized,{DB,BUCKET});
+  let response=await notebookPolicy.before(normalized,{DB,BUCKET})??await handleWishes(normalized,{DB,BUCKET})??await worker.fetch(normalized,{DB,BUCKET});
+  response=await notebookPolicy.after(normalized,response);
   const out=new Headers(response.headers);out.delete('Set-Cookie');out.set('Cache-Control','no-store');out.set('X-Content-Type-Options','nosniff');out.set('Referrer-Policy','no-referrer');out.set('X-Tennis-Release',RELEASE);
   return new Response(response.body,{status:response.status,headers:out});
  }catch(error){return json(request,{error:error?.status===413?'图片请小于 2MB，文字请缩短后重试。':'新站暂时连不上，请稍后重试。'},error?.status===413?413:503);}

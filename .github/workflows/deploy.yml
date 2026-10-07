@@ -3,11 +3,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      full_fresh_acceptance:
-        description: Run disposable-account live acceptance (requires cleanup of exact fixture IDs)
-        type: boolean
-        default: false
 permissions:
   contents: read
   pages: write
@@ -86,13 +81,10 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Verify personal wishes in an isolated browser and database
         run: npm run test:wishes:browser
+      - name: Verify one notebook and archived data boundaries in an isolated browser
+        run: npm run test:notebook:browser
       - name: Read-only actual Pages and backend verification
         run: node test/fresh-published-smoke.mjs
-      - name: Explicit one-time live login and saving acceptance
-        if: ${{ inputs.full_fresh_acceptance == true || contains(github.event.head_commit.message, '[fresh-acceptance]') }}
-        env:
-          LIVE_PAGES: '1'
-        run: node test/fresh-live-browser.mjs
       - name: Save sanitized verification results
         if: always()
         uses: actions/upload-artifact@v4
@@ -100,7 +92,6 @@ jobs:
           name: fresh-published-verification
           path: |
             fresh-smoke-report.json
-            fresh-live-report.json
             fresh-welcome.png
             fresh-mobile-welcome.png
           if-no-files-found: ignore
